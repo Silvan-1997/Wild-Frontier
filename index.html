@@ -1147,7 +1147,13 @@ function loadGame(state){
    o.mesh.visible=o.active;
   });}
   if(Array.isArray(state.campfires))for(const fire of state.campfires.slice(0,100))if(Number.isFinite(fire.x)&&Number.isFinite(fire.z))addCampfire(fire.x,fire.z);
-  if(Array.isArray(state.buildings))for(const b of state.buildings.slice(0,150))if(['foundation','raisedFoundation','wall','door','window','stairs','roof','slopedRoof'].includes(b.type)&&Number.isFinite(b.x)&&Number.isFinite(b.z))addBuilding(b.type,b.x,b.z,Number.isFinite(b.rotation)?b.rotation:0,!!b.open,Number.isInteger(b.groupId)?b.groupId:null,Number.isFinite(b.elevation)?b.elevation:null);
+  if(Array.isArray(state.buildings))for(const b of state.buildings.slice(0,150))if(['foundation','raisedFoundation','wall','door','window','stairs','roof','slopedRoof','bed'].includes(b.type)&&Number.isFinite(b.x)&&Number.isFinite(b.z))addBuilding(b.type,b.x,b.z,Number.isFinite(b.rotation)?b.rotation:0,!!b.open,Number.isInteger(b.groupId)?b.groupId:null,Number.isFinite(b.elevation)?b.elevation:null);
+  // Restore stable bed IDs after constructing meshes; old saves have no bed IDs.
+  if(Array.isArray(state.buildings)){
+   const saved=state.buildings.filter(b=>['foundation','raisedFoundation','wall','door','window','stairs','roof','slopedRoof','bed'].includes(b.type)&&Number.isFinite(b.x)&&Number.isFinite(b.z)).slice(0,150);
+   for(let i=0;i<Math.min(saved.length,buildings.length);i++)if(buildings[i].type==='bed'&&Number.isInteger(saved[i].bedId))buildings[i].bedId=saved[i].bedId;
+  }
+  nextBedId=Math.max(nextBedId,...buildings.filter(b=>b.type==='bed').map(b=>b.bedId+1));
   resolveCollision(player.pos);player.pos.y=terrainHeight(player.pos.x,player.pos.z)+1.7;verticalSpeed=0;grounded=true;
   document.querySelector('#equipAxe').textContent=axeEquipped?'Axt ablegen':'Axt ausrüsten';
   updateInv();document.querySelector('#saveStatus').textContent='Spielstand geladen · automatische Sicherung aktiv';
