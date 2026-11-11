@@ -108,12 +108,12 @@ button:hover{background:#416445}button:disabled{opacity:.35;cursor:not-allowed}
 #craft .craftChoice span{display:none}
 #craft .craftChoice[hidden]{display:none!important}
 @media(pointer:coarse){#buildPalette{bottom:60px!important;max-height:43vh}#actionPad{gap:5px;right:8px}.touchBtn{width:56px;height:56px;font-size:10px}}
-</style>
+#mouseHint{position:fixed;left:50%;bottom:145px;transform:translateX(-50%);z-index:12;padding:10px 16px;border:1px solid #9db99c;border-radius:10px;background:#17281fea;color:#f2fff0;font-size:13px;text-align:center;pointer-events:none;max-width:85vw}#mouseHint[hidden]{display:none!important}</style>
 </head>
 <body class="in-main-menu">
 <div id="game"></div>
 <div id="start"><div class="card panel">
-<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.6.3.1</div>
+<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.6.4</div>
 <p>Erkunde eine unebene Waldlandschaft, sammle Rohstoffe, stelle eine Axt her und bearbeite Bäume und Felsen. Dies bleibt vorerst ein lokaler Einzelspieler-Prototyp.</p>
 <p><b>WASD</b> bewegen · <b>Maus</b> umsehen · <b>E</b> sammeln · <b>Shift</b> sprinten · <b>I</b> Inventar · <b>C</b> Crafting · <b>1–4</b> Schnellauswahl · <b>R</b> drehen · <b>E</b> platzieren · <b>Esc</b> Maus lösen</p>
 <button id="play" type="button" disabled>SPIEL LADEN …</button><p id="menuStatus" class="small" role="status">Spielwelt wird vorbereitet …</p>
@@ -192,6 +192,7 @@ button:hover{background:#416445}button:disabled{opacity:.35;cursor:not-allowed}
 <button id="slotHammer" type="button">🔨<br>3 Hammer</button>
 <button id="slotBuild" type="button">🏗️<br>4 Bauen</button>
 </div>
+<div id="mouseHint" hidden role="status">🖱️ Maus frei · Ins Spiel klicken zum Umsehen · Esc = Maus lösen</div>
 <div id="buildPalette" class="panel" hidden aria-label="Bauteile auswählen">
  <div class="buildMenuHeader"><strong>🏗️ Bauteile</strong><button id="buildMenuClose" type="button">✕</button></div>
  <div class="menuFilters" id="buildCategories"></div><div id="buildItems" class="buildItems"></div>
@@ -394,7 +395,7 @@ function openInventory(){
 function closeInventory(resume=true){
  inventoryOverlay.hidden=true;document.querySelector('#inventoryOpen').focus();
  if(resume&&inventoryResumePointerLock&&craftOverlay.hidden&&!matchMedia('(pointer:coarse)').matches){renderer.domElement.requestPointerLock().catch(()=>{});}
- inventoryResumePointerLock=false;
+ inventoryResumePointerLock=false;updateMouseHint();
 }
 document.querySelector('#inventoryOpen').addEventListener('click',openInventory);
 document.querySelector('#inventoryClose').addEventListener('click',()=>closeInventory());
@@ -441,8 +442,9 @@ function showBuildMenu(category=buildCategory){
   button.addEventListener('click',()=>startPlacement(type));host.append(button);
  }
  document.querySelector('#buildPalette').hidden=false;
+ updateMouseHint();
 }
-document.querySelector('#buildMenuClose').addEventListener('click',()=>document.querySelector('#buildPalette').hidden=true);
+document.querySelector('#buildMenuClose').addEventListener('click',()=>{document.querySelector('#buildPalette').hidden=true;updateMouseHint();});
 function openCraft(){
  if(!inventoryOverlay.hidden)closeInventory(false);
  resumePointerLock=document.pointerLockElement===renderer.domElement;
@@ -453,7 +455,7 @@ function openCraft(){
 function closeCraft(){
  craftOverlay.hidden=true;document.querySelector('#craftOpen').focus();
  if(resumePointerLock&&inventoryOverlay.hidden&&!matchMedia('(pointer:coarse)').matches){renderer.domElement.requestPointerLock().catch(()=>{});}
- resumePointerLock=false;
+ resumePointerLock=false;updateMouseHint();
 }
 document.querySelector('#craftOpen').addEventListener('click',openCraft);
 document.querySelector('#craftClose').addEventListener('click',closeCraft);
@@ -470,9 +472,24 @@ document.querySelector('#play').addEventListener('click',()=>{
  blocker.style.display='none';
  if(matchMedia('(pointer: coarse)').matches){
    try{screen.orientation?.lock?.('landscape').catch(()=>{});}catch(e){}
- }else{renderer.domElement.requestPointerLock();}
+ }else{lockGameMouse();}
+ updateMouseHint();
 });
-document.addEventListener('pointerlockchange',()=>{locked=document.pointerLockElement===renderer.domElement;});
+const mouseHint=document.querySelector('#mouseHint');
+function updateMouseHint(){
+ const active=!document.body.classList.contains('in-main-menu')&&!matchMedia('(pointer:coarse)').matches;
+ const uiOpen=!craftOverlay.hidden||!inventoryOverlay.hidden||!settingsOverlay.hidden||!document.querySelector('#buildPalette').hidden;
+ mouseHint.hidden=!active||locked||uiOpen;
+}
+function lockGameMouse(){
+ if(matchMedia('(pointer:coarse)').matches||document.body.classList.contains('in-main-menu'))return;
+ if(!craftOverlay.hidden||!inventoryOverlay.hidden||!settingsOverlay.hidden||!document.querySelector('#buildPalette').hidden)return;
+ if(document.pointerLockElement===renderer.domElement)return;
+ renderer.domElement.requestPointerLock().catch(updateMouseHint);
+}
+renderer.domElement.addEventListener('click',lockGameMouse);
+document.addEventListener('pointerlockchange',()=>{locked=document.pointerLockElement===renderer.domElement;updateMouseHint();});
+document.addEventListener('pointerlockerror',updateMouseHint);
 document.addEventListener('mousemove',e=>{if(!locked)return;yaw-=e.movementX*.0022;pitch-=e.movementY*.0022;pitch=Math.max(-1.45,Math.min(1.45,pitch));});
 document.addEventListener('keydown',e=>{if(e.repeat)return;if(e.code==='KeyI'){e.preventDefault();inventoryOverlay.hidden?openInventory():closeInventory();return;}if(['Digit1','Digit2','Digit3','Digit4'].includes(e.code)&&craftOverlay.hidden&&inventoryOverlay.hidden){e.preventDefault();const n=Number(e.code.slice(-1));if(n===4)startPlacement(lastBuildType);else selectTool(['hands','axe','hammer'][n-1]);return;}if(e.code==='KeyC'){e.preventDefault();craftOverlay.hidden?openCraft():closeCraft();return;}if(!craftOverlay.hidden||!inventoryOverlay.hidden)return;keys[e.code]=true;if(placement){if(e.code==='KeyE'||e.code==='Enter')confirmPlacement();if(e.code==='KeyR')rotatePlacement();return;}if(e.code==='KeyE'){interactWorld();}});
 document.addEventListener('keyup',e=>keys[e.code]=false);
@@ -608,7 +625,7 @@ function selectTool(type){
  updateHotbar();updateInventoryDetail();
 }
 for(const [id,type] of [['slotHands','hands'],['slotAxe','axe'],['slotHammer','hammer']])document.querySelector('#'+id).addEventListener('click',()=>selectTool(type));
-document.querySelector('#slotBuild').addEventListener('click',()=>{if(placement)cancelPlacement();showBuildMenu();});
+document.querySelector('#slotBuild').addEventListener('click',()=>{if(placement)cancelPlacement();if(document.pointerLockElement)document.exitPointerLock();showBuildMenu();});
 document.querySelector('#craftHammer').addEventListener('click',()=>{
  if(inventory.hammer||inventory.wood<3||inventory.stone<2){toast('Für den Bauhammer brauchst du 3 Holz und 2 Stein.');return;}
  inventory.wood-=3;inventory.stone-=2;inventory.hammer=1;selectTool('hammer');updateInv();saveGame(true);toast('Bauhammer hergestellt.');
@@ -923,7 +940,7 @@ function openSettings(){
  if(document.pointerLockElement)document.exitPointerLock();
  keys.TouchSprint=false;stickVec={x:0,y:0};
 }
-function closeSettings(){settingsOverlay.hidden=true;}
+function closeSettings(){settingsOverlay.hidden=true;updateMouseHint();}
 document.querySelector('#settingsButton').addEventListener('click',openSettings);
 document.querySelector('#settingsClose').addEventListener('click',closeSettings);
 document.querySelector('#settingsSave').addEventListener('click',()=>{
