@@ -108,12 +108,12 @@ button:hover{background:#416445}button:disabled{opacity:.35;cursor:not-allowed}
 #craft .craftChoice span{display:none}
 #craft .craftChoice[hidden]{display:none!important}
 @media(pointer:coarse){#buildPalette{bottom:60px!important;max-height:43vh}#actionPad{gap:5px;right:8px}.touchBtn{width:56px;height:56px;font-size:10px}}
-#mouseHint{position:fixed;left:50%;bottom:145px;transform:translateX(-50%);z-index:12;padding:10px 16px;border:1px solid #9db99c;border-radius:10px;background:#17281fea;color:#f2fff0;font-size:13px;text-align:center;pointer-events:none;max-width:85vw}#mouseHint[hidden]{display:none!important}</style>
+#mouseHint{position:fixed;left:50%;bottom:145px;transform:translateX(-50%);z-index:12;padding:10px 16px;border:1px solid #9db99c;border-radius:10px;background:#17281fea;color:#f2fff0;font-size:13px;text-align:center;pointer-events:none;max-width:85vw}#mouseHint[hidden]{display:none!important}#mouseLockButton{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:13;padding:13px 20px;background:#294f32;color:#fff;border:2px solid #a2d6a7;border-radius:12px;cursor:pointer;font-weight:700}#mouseLockButton[hidden]{display:none!important}</style>
 </head>
 <body class="in-main-menu">
 <div id="game"></div>
 <div id="start"><div class="card panel">
-<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.6.4</div>
+<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.6.4.1</div>
 <p>Erkunde eine unebene Waldlandschaft, sammle Rohstoffe, stelle eine Axt her und bearbeite Bäume und Felsen. Dies bleibt vorerst ein lokaler Einzelspieler-Prototyp.</p>
 <p><b>WASD</b> bewegen · <b>Maus</b> umsehen · <b>E</b> sammeln · <b>Shift</b> sprinten · <b>I</b> Inventar · <b>C</b> Crafting · <b>1–4</b> Schnellauswahl · <b>R</b> drehen · <b>E</b> platzieren · <b>Esc</b> Maus lösen</p>
 <button id="play" type="button" disabled>SPIEL LADEN …</button><p id="menuStatus" class="small" role="status">Spielwelt wird vorbereitet …</p>
@@ -193,6 +193,7 @@ button:hover{background:#416445}button:disabled{opacity:.35;cursor:not-allowed}
 <button id="slotBuild" type="button">🏗️<br>4 Bauen</button>
 </div>
 <div id="mouseHint" hidden role="status">🖱️ Maus frei · Ins Spiel klicken zum Umsehen · Esc = Maus lösen</div>
+<button id="mouseLockButton" type="button" hidden>🎮 Maussteuerung aktivieren</button>
 <div id="buildPalette" class="panel" hidden aria-label="Bauteile auswählen">
  <div class="buildMenuHeader"><strong>🏗️ Bauteile</strong><button id="buildMenuClose" type="button">✕</button></div>
  <div class="menuFilters" id="buildCategories"></div><div id="buildItems" class="buildItems"></div>
@@ -472,22 +473,32 @@ document.querySelector('#play').addEventListener('click',()=>{
  blocker.style.display='none';
  if(matchMedia('(pointer: coarse)').matches){
    try{screen.orientation?.lock?.('landscape').catch(()=>{});}catch(e){}
- }else{lockGameMouse();}
+ }else{desktopMouseActive=true;lockGameMouse();}
  updateMouseHint();
 });
 const mouseHint=document.querySelector('#mouseHint');
+const mouseLockButton=document.querySelector('#mouseLockButton');
+let desktopMouseActive=!matchMedia('(pointer:coarse)').matches;
+document.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'){desktopMouseActive=true;updateMouseHint();}},true);
 function updateMouseHint(){
- const active=!document.body.classList.contains('in-main-menu')&&!matchMedia('(pointer:coarse)').matches;
+ const active=!document.body.classList.contains('in-main-menu')&&desktopMouseActive;
  const uiOpen=!craftOverlay.hidden||!inventoryOverlay.hidden||!settingsOverlay.hidden||!document.querySelector('#buildPalette').hidden;
  mouseHint.hidden=!active||locked||uiOpen;
+ mouseLockButton.hidden=!active||locked||uiOpen;
 }
 function lockGameMouse(){
- if(matchMedia('(pointer:coarse)').matches||document.body.classList.contains('in-main-menu'))return;
+ if(document.body.classList.contains('in-main-menu'))return;
  if(!craftOverlay.hidden||!inventoryOverlay.hidden||!settingsOverlay.hidden||!document.querySelector('#buildPalette').hidden)return;
  if(document.pointerLockElement===renderer.domElement)return;
  renderer.domElement.requestPointerLock().catch(updateMouseHint);
 }
 renderer.domElement.addEventListener('click',lockGameMouse);
+mouseLockButton.addEventListener('click',lockGameMouse);
+document.addEventListener('pointerdown',e=>{
+ if(e.pointerType!=='mouse'||e.button!==0||document.body.classList.contains('in-main-menu'))return;
+ if(e.target.closest('button,input,select,textarea,a,[role="dialog"],#buildPalette,#minimapPanel'))return;
+ lockGameMouse();
+},true);
 document.addEventListener('pointerlockchange',()=>{locked=document.pointerLockElement===renderer.domElement;updateMouseHint();});
 document.addEventListener('pointerlockerror',updateMouseHint);
 document.addEventListener('mousemove',e=>{if(!locked)return;yaw-=e.movementX*.0022;pitch-=e.movementY*.0022;pitch=Math.max(-1.45,Math.min(1.45,pitch));});
