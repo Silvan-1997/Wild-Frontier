@@ -113,7 +113,7 @@ button:hover{background:#416445}button:disabled{opacity:.35;cursor:not-allowed}
 <body class="in-main-menu">
 <div id="game"></div>
 <div id="start"><div class="card panel">
-<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.8.16</div>
+<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.8.17</div>
 <p>Erkunde eine unebene Waldlandschaft, sammle Rohstoffe, stelle eine Axt her und bearbeite Bäume und Felsen. Deine private Survival-Welt wird mit deinem Konto online gespeichert.</p>
 <p><b>WASD</b> bewegen · <b>Maus</b> umsehen · <b>E</b> sammeln · <b>Shift</b> sprinten · <b>I</b> Inventar · <b>C</b> Crafting · <b>1–4</b> Schnellauswahl · <b>R</b> drehen · <b>E</b> platzieren · <b>Esc</b> Maus lösen</p>
 <section id="cloudLogin" style="margin:14px auto;padding:12px;border:1px solid #658c6d;border-radius:10px;max-width:400px;background:#10231b">
@@ -716,6 +716,7 @@ function forward(){return new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));}
 // Kollisionen mit iterativer Aufloesung und Schrittbewegung: weniger Durchdringen bei Sprint/Frame-Spitzen.
 function resolveCollision(candidate){
  const radius=.38;
+ const STEP_HEIGHT=.48;
  for(let pass=0;pass<4;pass++){
   let corrected=false;
   for(const o of objects){if(o.active===false||!o.solidRadius)continue;
@@ -734,7 +735,8 @@ function resolveCollision(candidate){
    const ground=terrainHeight(b.x,b.z);
    if(deckSurface(b)-ground<.48)continue;
    const feet=player.pos.y-1.7;
-   if(feet>=deckSurface(b)-.10)continue;
+   // Small ledges can be stepped onto while grounded; tall ones remain solid.
+   if(feet>=deckSurface(b)-.10||grounded&&deckSurface(b)-feet<=STEP_HEIGHT)continue;
    const c=Math.cos(b.rotation),sn=Math.sin(b.rotation);
    const dx=candidate.x-b.x,dz=candidate.z-b.z;
    let lx=dx*c+dz*sn,lz=-dx*sn+dz*c;
@@ -1282,8 +1284,9 @@ function animate(now){
   const currentFeet=player.pos.y-1.7;
   verticalSpeed-=15*dt;player.pos.y+=verticalSpeed*dt;
   const nextFeet=player.pos.y-1.7;
+  const stepOntoDeck=surface!==null&&grounded&&verticalSpeed<=0&&surface-currentFeet>=0&&surface-currentFeet<=.48;
   const landingOnDeck=surface!==null&&verticalSpeed<=0&&currentFeet>=surface-.15&&nextFeet<=surface;
-  const floor=landingOnDeck||surface!==null&&grounded&&Math.abs(currentFeet-surface)<.15?Math.max(terrain,surface):terrain;
+  const floor=stepOntoDeck||landingOnDeck||surface!==null&&grounded&&Math.abs(currentFeet-surface)<.15?Math.max(terrain,surface):terrain;
   if(player.pos.y<=floor+1.7){player.pos.y=floor+1.7;verticalSpeed=0;grounded=true;}
   else grounded=false;
   player.hunger=Math.max(0,player.hunger-dt*.045);player.thirst=Math.max(0,player.thirst-dt*.07);
