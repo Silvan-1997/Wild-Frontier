@@ -329,9 +329,39 @@ const mats={
  wood:new THREE.MeshStandardMaterial({color:0x9a7048}),
  fire:new THREE.MeshStandardMaterial({color:0xff9d36,emissive:0xff4b08,emissiveIntensity:2})
 };
-const groundGeo=new THREE.PlaneGeometry(220,220,220,220);groundGeo.rotateX(-Math.PI/2);
-const posAttr=groundGeo.attributes.position;for(let i=0;i<posAttr.count;i++){const x=posAttr.getX(i),z=posAttr.getZ(i);posAttr.setY(i,terrainHeight(x,z));}
-groundGeo.computeVertexNormals();const ground=new THREE.Mesh(groundGeo,mats.grass);ground.receiveShadow=true;scene.add(ground);
+// Streaming terrain: fixed world coordinates ensure reproducible geometry and hotspot placement.
+const CHUNK_SIZE=64,CHUNK_SEGMENTS=32,CHUNK_RADIUS=2;
+const terrainChunks=new Map();
+function chunkKey(cx,cz){return cx+','+cz;}
+function makeTerrainChunk(cx,cz){
+ const geometry=new THREE.PlaneGeometry(CHUNK_SIZE,CHUNK_SIZE,CHUNK_SEGMENTS,CHUNK_SEGMENTS);
+ geometry.rotateX(-Math.PI/2);
+ const a=geometry.attributes.position,ox=cx*CHUNK_SIZE,oz=cz*CHUNK_SIZE;
+ for(let i=0;i<a.count;i++)a.setY(i,terrainHeight(ox+a.getX(i),oz+a.getZ(i)));
+ geometry.computeVertexNormals();
+ const mesh=new THREE.Mesh(geometry,mats.grass);
+ mesh.position.set(ox,0,oz);mesh.receiveShadow=true;mesh.frustumCulled=true;
+ scene.add(mesh);terrainChunks.set(chunkKey(cx,cz),mesh);
+}
+function streamTerrain(x,z){
+ const cx=Math.floor((x+CHUNK_SIZE/2)/CHUNK_SIZE),cz=Math.floor((z+CHUNK_SIZE/2)/CHUNK_SIZE);
+ const needed=new Set();
+ for(let dz=-CHUNK_RADIUS;dz<=CHUNK_RADIUS;dz++)for(let dx=-CHUNK_RADIUS;dx<=CHUNK_RADIUS;dx++){
+  const xx=cx+dx,zz=cz+dz,key=chunkKey(xx,zz);needed.add(key);
+  if(!terrainChunks.has(key))makeTerrainChunk(xx,zz);
+ }
+ for(const [key,mesh] of terrainChunks)if(!needed.has(key)){
+  scene.remove(mesh);mesh.geometry.dispose();terrainChunks.delete(key);
+ }
+}
+let lastTerrainChunkX=NaN,lastTerrainChunkZ=NaN;
+function updateTerrainStreaming(x,z){
+ const cx=Math.floor((x+CHUNK_SIZE/2)/CHUNK_SIZE),cz=Math.floor((z+CHUNK_SIZE/2)/CHUNK_SIZE);
+ if(cx!==lastTerrainChunkX||cz!==lastTerrainChunkZ){
+  lastTerrainChunkX=cx;lastTerrainChunkZ=cz;streamTerrain(x,z);
+ }
+}
+streamTerrain(0,0);
 // Kleine Bodenflecken folgen der Geländehöhe.
 for(let i=0;i<55;i++){let x=(random()-.5)*180,z=(random()-.5)*180;({x,z}=safeResourcePosition(x,z));const g=new THREE.Mesh(new THREE.CircleGeometry(1+random()*2,12),new THREE.MeshStandardMaterial({color:[0x496d42,0x5d7e4c,0x657d4b][i%3],roughness:1}));g.rotation.x=-Math.PI/2;g.position.set(x,terrainHeight(x,z)+.025,z);g.scale.set(1+random(),.5+random(),1);scene.add(g);}
 const objects=[];
@@ -1054,6 +1084,7 @@ function drawMinimap(now){
 let last=performance.now();
 function animate(now){
  requestAnimationFrame(animate);const dt=Math.min((now-last)/1000,.05);last=now;elapsed+=dt;
+ updateTerrainStreaming(player.pos.x,player.pos.z);
  if((locked||coarse)&&craftOverlay.hidden&&inventoryOverlay.hidden&&settingsOverlay.hidden){
   const f=forward(),right=new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw));
   let move=new THREE.Vector3();if(keys.KeyW)move.add(f);if(keys.KeyS)move.sub(f);if(keys.KeyD)move.add(right);if(keys.KeyA)move.sub(right);
