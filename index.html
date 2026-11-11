@@ -113,9 +113,15 @@ button:hover{background:#416445}button:disabled{opacity:.35;cursor:not-allowed}
 <body class="in-main-menu">
 <div id="game"></div>
 <div id="start"><div class="card panel">
-<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.6.4.1</div>
-<p>Erkunde eine unebene Waldlandschaft, sammle Rohstoffe, stelle eine Axt her und bearbeite Bäume und Felsen. Dies bleibt vorerst ein lokaler Einzelspieler-Prototyp.</p>
+<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.7.0</div>
+<p>Erkunde eine unebene Waldlandschaft, sammle Rohstoffe, stelle eine Axt her und bearbeite Bäume und Felsen. Deine private Survival-Welt wird mit deinem Konto online gespeichert.</p>
 <p><b>WASD</b> bewegen · <b>Maus</b> umsehen · <b>E</b> sammeln · <b>Shift</b> sprinten · <b>I</b> Inventar · <b>C</b> Crafting · <b>1–4</b> Schnellauswahl · <b>R</b> drehen · <b>E</b> platzieren · <b>Esc</b> Maus lösen</p>
+<section id="cloudLogin" style="margin:14px auto;padding:12px;border:1px solid #658c6d;border-radius:10px;max-width:400px;background:#10231b">
+<strong>☁️ Online-Spielstand</strong>
+<p id="authStatus" class="small" role="status">Bitte anmelden oder registrieren.</p>
+<div id="authFields"><input id="authEmail" type="email" autocomplete="email" placeholder="E-Mail-Adresse" style="width:100%;padding:10px;margin:5px 0;color:#fff;background:#1c3427;border:1px solid #789b7a;border-radius:6px"><input id="authPassword" type="password" autocomplete="current-password" placeholder="Passwort (mind. 6 Zeichen)" style="width:100%;padding:10px;margin:5px 0;color:#fff;background:#1c3427;border:1px solid #789b7a;border-radius:6px"><div style="display:flex;gap:7px;justify-content:center;flex-wrap:wrap"><button id="authSignIn" type="button">Anmelden</button><button id="authSignUp" type="button">Registrieren</button></div></div>
+<button id="authSignOut" type="button" hidden>Abmelden</button>
+</section>
 <button id="play" type="button" disabled>SPIEL LADEN …</button><p id="menuStatus" class="small" role="status">Spielwelt wird vorbereitet …</p>
 <p class="small">Am besten am Desktop mit Tastatur und Maus spielen. Three.js wird beim Start aus dem Internet geladen.</p>
 </div></div>
@@ -229,7 +235,52 @@ window.addEventListener('error',function(e){if(!window.wildFrontierReady){const 
 </script>
 <script type="module">
 import {riverCenter,riverDistance,inRiver,safeResourcePosition,terrainHeight} from "./src/terrain.js";
+import {createClient} from "https://esm.sh/@supabase/supabase-js@2";
 import {createGraphicsSettings} from "./src/graphics.js";
+const supabase=createClient('https://qoeqnijggilzfenvuopo.supabase.co','sb_publishable_DbEv-bbtemO0iKeKhg73xQ_xYjOqJMd');
+let cloudUser=null,cloudWorldId=null,cloudReady=false,cloudBusy=false,cloudPending=null,cloudSaveTimer=null;
+const authStatus=document.querySelector('#authStatus'),authFields=document.querySelector('#authFields'),authSignOut=document.querySelector('#authSignOut');
+function setAuthStatus(message){authStatus.textContent=message;}
+function refreshPlayButton(){
+ const btn=document.querySelector('#play');
+ btn.disabled=!window.wildFrontierReady||!cloudReady;
+ btn.textContent=cloudReady?'▶ ONLINE SPIELEN':'☁️ ANMELDUNG ERFORDERLICH';
+}
+async function setupCloudUser(user){
+ cloudReady=false;cloudUser=user;cloudWorldId=null;refreshPlayButton();
+ if(!user){authFields.hidden=false;authSignOut.hidden=true;setAuthStatus('Melde dich an oder erstelle ein Konto.');return;}
+ authFields.hidden=true;authSignOut.hidden=false;setAuthStatus('Lade deine Cloud-Welt …');
+ try{
+  const {data:existing,error:readError}=await supabase.from('worlds').select('id').eq('owner_id',user.id).order('created_at',{ascending:true}).limit(1);
+  if(readError)throw readError;
+  let world=existing?.[0];
+  if(!world){const {data,error}=await supabase.from('worlds').insert({owner_id:user.id,name:'Meine Survival-Welt'}).select('id').single();if(error)throw error;world=data;}
+  cloudWorldId=world.id;
+  const {data:saved,error:saveError}=await supabase.from('world_saves').select('save_data').eq('world_id',cloudWorldId).maybeSingle();
+  if(saveError)throw saveError;
+  if(saved?.save_data)loadGame(saved.save_data);
+  cloudReady=true;setAuthStatus('Angemeldet: '+(user.email||'Spieler')+' · Cloud-Spielstand bereit.');
+  refreshPlayButton();
+ }catch(e){setAuthStatus('Cloud-Fehler: '+e.message);refreshPlayButton();}
+}
+document.querySelector('#authSignIn').addEventListener('click',async()=>{
+ const email=document.querySelector('#authEmail').value.trim(),password=document.querySelector('#authPassword').value;
+ setAuthStatus('Anmeldung läuft …');
+ const {data,error}=await supabase.auth.signInWithPassword({email,password});
+ if(error){setAuthStatus('Anmeldung fehlgeschlagen: '+error.message);return;}
+ await setupCloudUser(data.user);
+});
+document.querySelector('#authSignUp').addEventListener('click',async()=>{
+ const email=document.querySelector('#authEmail').value.trim(),password=document.querySelector('#authPassword').value;
+ if(!email||password.length<6){setAuthStatus('Bitte gültige E-Mail und mindestens 6 Zeichen Passwort eingeben.');return;}
+ setAuthStatus('Registrierung läuft …');
+ const {data,error}=await supabase.auth.signUp({email,password,emailRedirectTo:location.origin+location.pathname});
+ if(error){setAuthStatus('Registrierung fehlgeschlagen: '+error.message);return;}
+ if(data.session)await setupCloudUser(data.user);
+ else setAuthStatus('Registriert! Bitte Bestätigungs-E-Mail öffnen und danach hier anmelden.');
+});
+authSignOut.addEventListener('click',async()=>{if(!document.body.classList.contains('in-main-menu'))return;await supabase.auth.signOut();await setupCloudUser(null);});
+supabase.auth.getUser().then(({data,error})=>{if(data?.user)setupCloudUser(data.user);else setupCloudUser(null);}).catch(e=>setAuthStatus('Verbindung fehlgeschlagen: '+e.message));
 let THREE;
 const sources=[
  'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js',
@@ -468,7 +519,7 @@ function bar(id,val){document.querySelector('#'+id+'Bar').style.width=Math.max(0
 updateInv();
 const blocker=document.querySelector('#start');
 document.querySelector('#play').addEventListener('click',()=>{
- if(!window.wildFrontierReady)return;
+ if(!window.wildFrontierReady||!cloudReady)return;
  document.body.classList.remove('in-main-menu');
  blocker.style.display='none';
  if(matchMedia('(pointer: coarse)').matches){
@@ -910,15 +961,28 @@ function saveGame(silent=false){
  try{
   const state={version:4,pos:[player.pos.x,player.pos.z],yaw,pitch,health:player.health,hunger:player.hunger,thirst:player.thirst,inventory:{...inventory},axeEquipped,elapsed,
    objects:objects.map(o=>({active:o.active!==false,hp:o.hp,respawnAt:o.respawnAt||0})),campfires:campfires.map(({x,z})=>({x,z})),buildings:buildings.map(({type,x,z,rotation,open,groupId,elevation})=>({type,x,z,rotation,open:!!open,groupId,elevation})),activeTool};
-  localStorage.setItem(SAVE_KEY,JSON.stringify(state));
-  document.querySelector('#saveStatus').textContent='Gespeichert · '+new Date().toLocaleTimeString('de-CH',{hour:'2-digit',minute:'2-digit'});
-  if(!silent)toast('Spielstand lokal gespeichert. Lade die Seite neu, um das Laden zu prüfen.');
+  if(!cloudReady||!cloudWorldId)return;
+  cloudPending=state;
+  if(!cloudBusy)flushCloudSave();
+  if(!silent)toast('Cloud-Speicherung gestartet …');
  }catch(e){document.querySelector('#saveStatus').textContent='Speichern nicht möglich';if(!silent)toast('Speichern fehlgeschlagen: Browserspeicher nicht verfügbar.');}
 }
-function loadGame(){
+async function flushCloudSave(){
+ if(cloudBusy||!cloudReady||!cloudWorldId||!cloudPending)return;
+ cloudBusy=true;
+ const state=cloudPending;cloudPending=null;
  try{
-  const raw=localStorage.getItem(SAVE_KEY);if(!raw)return;
-  const state=JSON.parse(raw);if(state.version!==4||!Array.isArray(state.pos)||state.pos.length!==2)return;
+  const {error}=await supabase.from('world_saves').upsert({world_id:cloudWorldId,save_data:state,save_version:4,updated_at:new Date().toISOString()},{onConflict:'world_id'});
+  if(error)throw error;
+  document.querySelector('#saveStatus').textContent='☁️ Gespeichert · '+new Date().toLocaleTimeString('de-CH',{hour:'2-digit',minute:'2-digit'});
+ }catch(e){
+  cloudPending=cloudPending||state;
+  document.querySelector('#saveStatus').textContent='⚠️ Cloud-Speichern fehlgeschlagen: '+e.message;
+ }finally{cloudBusy=false;if(cloudPending&&cloudPending!==state)setTimeout(flushCloudSave,500);}
+}
+function loadGame(state){
+ try{
+  if(!state)return;if(state.version!==4||!Array.isArray(state.pos)||state.pos.length!==2)return;
   const [x,z]=state.pos;if(!Number.isFinite(x)||!Number.isFinite(z))return;
   player.pos.x=THREE.MathUtils.clamp(x,-106,106);player.pos.z=THREE.MathUtils.clamp(z,-106,106);
   yaw=Number.isFinite(state.yaw)?state.yaw:0;pitch=Number.isFinite(state.pitch)?THREE.MathUtils.clamp(state.pitch,-1.45,1.45):0;
@@ -941,7 +1005,7 @@ function loadGame(){
 }
 nextBuildingGroup=Math.max(nextBuildingGroup,1,...buildings.map(b=>(b.groupId||0)+1));
 
-let elapsed=0;loadGame();
+let elapsed=0;
 const settingsOverlay=document.querySelector('#settingsOverlay');
 const settingsSaveStatus=document.querySelector('#settingsSaveStatus');
 function openSettings(){
@@ -1016,7 +1080,7 @@ function animate(now){
 }
 requestAnimationFrame(animate);
 window.wildFrontierReady=true;
-const playButton=document.querySelector('#play');playButton.disabled=false;playButton.textContent='▶ SPIELEN';
+const playButton=document.querySelector('#play');refreshPlayButton();
 document.querySelector('#menuStatus').textContent='Bereit · Spiel starten, um die Wildnis zu betreten.';
 addEventListener('pagehide',()=>saveGame(true));
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
