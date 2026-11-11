@@ -91,12 +91,29 @@ button:hover{background:#416445}button:disabled{opacity:.35;cursor:not-allowed}
 #buildQuick #buildRotate{touch-action:none;user-select:none;-webkit-user-select:none}#buildQuick #buildCancel{background:#763d3d}
 #buildInfo{position:fixed;left:50%;top:61%;transform:translateX(-50%);z-index:4;background:#14251bcf;padding:5px 9px;border-radius:7px;font-size:12px;pointer-events:none}
 @media(pointer:coarse){#minimapPanel{width:130px;right:7px;top:7px;padding:5px}#minimapPanel canvas{width:100%;height:auto}#coords{font-size:10px}#mapHeader{font-size:10px;margin-bottom:3px}#settingsButton{width:31px;height:30px;font-size:17px}#buildQuick{right:15px;bottom:94px}#buildQuick button{padding:8px;font-size:12px}}
+
+#buildPalette{position:fixed!important;left:50%!important;bottom:85px!important;transform:translateX(-50%)!important;right:auto!important;width:min(370px,calc(100vw - 24px))!important;max-height:48vh;overflow:auto;z-index:11;padding:12px!important;display:block;box-sizing:border-box}
+#buildPalette[hidden]{display:none!important}
+.buildMenuHeader{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
+.buildMenuHeader button{width:32px;min-width:32px}
+.menuFilters{display:flex;gap:5px;overflow-x:auto;padding:5px 0 9px;scrollbar-width:thin}
+.menuFilters button{white-space:nowrap;font-size:12px;padding:6px 9px;flex-shrink:0;min-height:30px}
+.menuFilters button.selected{background:#567c58;color:white;border-color:#9aca9b}
+.buildItems{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.buildItems button{font-size:12px;text-align:left;min-width:0;padding:9px 7px;white-space:normal;min-height:42px}
+.buildItems button.selected{outline:2px solid #8fd89a}
+#craftSearch{display:block;width:100%;box-sizing:border-box;margin:6px 0 8px;padding:9px 11px;border-radius:8px;background:#14251c;color:#fff;border:1px solid #68846b}
+#craft .craftGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:7px 0}
+#craft .craftChoice{font-size:12px;min-height:42px;padding:7px 9px;line-height:1.2}
+#craft .craftChoice span{display:none}
+#craft .craftChoice[hidden]{display:none!important}
+@media(pointer:coarse){#buildPalette{bottom:60px!important;max-height:43vh}#actionPad{gap:5px;right:8px}.touchBtn{width:56px;height:56px;font-size:10px}}
 </style>
 </head>
 <body class="in-main-menu">
 <div id="game"></div>
 <div id="start"><div class="card panel">
-<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.6.2</div>
+<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.6.3</div>
 <p>Erkunde eine unebene Waldlandschaft, sammle Rohstoffe, stelle eine Axt her und bearbeite Bäume und Felsen. Dies bleibt vorerst ein lokaler Einzelspieler-Prototyp.</p>
 <p><b>WASD</b> bewegen · <b>Maus</b> umsehen · <b>E</b> sammeln · <b>Shift</b> sprinten · <b>I</b> Inventar · <b>C</b> Crafting · <b>1–4</b> Schnellauswahl · <b>R</b> drehen · <b>E</b> platzieren · <b>Esc</b> Maus lösen</p>
 <button id="play" type="button" disabled>SPIEL LADEN …</button><p id="menuStatus" class="small" role="status">Spielwelt wird vorbereitet …</p>
@@ -133,7 +150,7 @@ button:hover{background:#416445}button:disabled{opacity:.35;cursor:not-allowed}
  <section id="craft" class="panel" role="dialog" aria-modal="true" aria-labelledby="craftTitle">
   <div class="craftHeader"><h3 id="craftTitle">🛠️ Crafting</h3><button id="craftClose" type="button" aria-label="Crafting schliessen">✕</button></div>
   <div class="small">Wähle einen Gegenstand aus, um Materialbedarf und Herstellung zu sehen.</div>
-  <div class="craftGrid">
+  <div class="menuFilters" id="craftCategories"></div><input id="craftSearch" type="search" placeholder="🔎 Rezept suchen ..." aria-label="Rezepte suchen"><div class="craftGrid">
    <button class="craftChoice selected" data-recipe="axe" type="button">🪓 Steinaxt<span>Werkzeug zum Holzfällen</span></button>
    <button class="craftChoice" data-recipe="hammer" type="button">🔨 Bauhammer<span>Gebäudeteile entfernen</span></button>
    <button class="craftChoice" data-recipe="fire" type="button">🔥 Lagerfeuer<span>Mit Platzierungsvorschau</span></button>
@@ -175,9 +192,9 @@ button:hover{background:#416445}button:disabled{opacity:.35;cursor:not-allowed}
 <button id="slotHammer" type="button">🔨<br>3 Hammer</button>
 <button id="slotBuild" type="button">🏗️<br>4 Bauen</button>
 </div>
-<div id="buildPalette" class="panel" hidden aria-label="Bauteil auswählen">
-<button data-build="fire">🔥 Feuer</button><button data-build="foundation">🪵 Boden</button><button data-build="raisedFoundation">🏗️ Erhöht</button>
-<button data-build="wall">🧱 Wand</button><button data-build="window">🪟 Fenster</button><button data-build="stairs">🪜 Treppe</button><button data-build="door">🚪 Rahmen</button><button data-build="roof">🏠 Dach</button><button data-build="slopedRoof">🏡 Schräg</button>
+<div id="buildPalette" class="panel" hidden aria-label="Bauteile auswählen">
+ <div class="buildMenuHeader"><strong>🏗️ Bauteile</strong><button id="buildMenuClose" type="button">✕</button></div>
+ <div class="menuFilters" id="buildCategories"></div><div id="buildItems" class="buildItems"></div>
 </div>
 <div id="buildQuick" hidden><button id="buildRotate" type="button" aria-label="Bauteil drehen">↻ Drehen</button><button id="buildSnap" type="button" aria-pressed="true">🧲 Einrasten: AN</button><button id="buildCancel" type="button" aria-label="Bauen beenden">✕</button></div>
 <div id="buildInfo" hidden role="status">Bauvorschau</div>
@@ -186,6 +203,7 @@ button:hover{background:#416445}button:disabled{opacity:.35;cursor:not-allowed}
   <div id="lookZone" aria-label="Kamera durch Wischen steuern"></div>
   <div id="actionPad">
     <button class="touchBtn" id="touchCollect" type="button">AKTION<span class="grip">↕</span></button>
+    <button class="touchBtn" id="touchJump" type="button">SPRUNG</button>
     <button class="touchBtn" id="touchSprint" type="button">SPRINT<span class="grip">↕</span></button>
   </div>
 </div>
@@ -385,6 +403,46 @@ document.querySelector('#items').addEventListener('click',e=>{const btn=e.target
 document.querySelector('#inventoryUse').addEventListener('click',()=>{if(selectedItem==='axe')selectTool('axe');if(selectedItem==='hammer')selectTool('hammer');if(selectedItem==='berries'){if(inventory.berries<3){toast('Du brauchst 3 Beeren.');return;}inventory.berries-=3;player.hunger=Math.min(100,player.hunger+20);bar('hunger',player.hunger);updateInv();saveGame(true);toast('3 Beeren gegessen: +20 Hunger.');}updateInventoryDetail();});
 const craftOverlay=document.querySelector('#craftOverlay');
 let resumePointerLock=false;
+const RECIPE_CATEGORIES={
+ tools:{label:'🛠️ Werkzeuge',items:['axe','hammer']},
+ foundations:{label:'🪵 Fundamente',items:['foundation','raisedFoundation']},
+ walls:{label:'🧱 Wände',items:['wall','window']},
+ roofs:{label:'🏠 Dächer',items:['roof','slopedRoof']},
+ access:{label:'🚪 Zugänge',items:['door','stairs']},
+ other:{label:'🔥 Sonstiges',items:['fire']}
+};
+const BUILD_CATEGORIES=Object.fromEntries(Object.entries(RECIPE_CATEGORIES).filter(([key])=>key!=='tools'));
+let craftCategory='all',buildCategory='foundations';
+function categoryButtons(target,categories,active,callback,all=false){
+ const host=document.querySelector(target);host.replaceChildren();
+ for(const [key,label] of [...(all?[['all','Alle']]:[]),...Object.entries(categories).map(([k,v])=>[k,v.label])]){
+  const button=document.createElement('button');button.type='button';button.textContent=label;
+  button.classList.toggle('selected',key===active);button.addEventListener('click',()=>callback(key));host.append(button);
+ }
+}
+function filterCraftRecipes(){
+ const query=document.querySelector('#craftSearch').value.trim().toLocaleLowerCase('de');
+ for(const button of document.querySelectorAll('.craftChoice')){
+  const type=button.dataset.recipe;
+  button.hidden=!(craftCategory==='all'||RECIPE_CATEGORIES[craftCategory]?.items.includes(type))||!button.textContent.toLocaleLowerCase('de').includes(query);
+ }
+ categoryButtons('#craftCategories',RECIPE_CATEGORIES,craftCategory,key=>{craftCategory=key;filterCraftRecipes();},true);
+}
+document.querySelector('#craftSearch').addEventListener('input',filterCraftRecipes);
+filterCraftRecipes();
+function showBuildMenu(category=buildCategory){
+ buildCategory=category;
+ categoryButtons('#buildCategories',BUILD_CATEGORIES,buildCategory,showBuildMenu);
+ const host=document.querySelector('#buildItems');host.replaceChildren();
+ for(const type of BUILD_CATEGORIES[buildCategory].items){
+  const button=document.createElement('button');button.type='button';
+  button.textContent=recipes[type].title;button.classList.toggle('selected',type===lastBuildType);
+  button.disabled=Object.entries(recipes[type].needs).some(([key,qty])=>inventory[key]<qty);
+  button.addEventListener('click',()=>startPlacement(type));host.append(button);
+ }
+ document.querySelector('#buildPalette').hidden=false;
+}
+document.querySelector('#buildMenuClose').addEventListener('click',()=>document.querySelector('#buildPalette').hidden=true);
 function openCraft(){
  if(!inventoryOverlay.hidden)closeInventory(false);
  resumePointerLock=document.pointerLockElement===renderer.domElement;
@@ -497,6 +555,26 @@ function resolveCollision(candidate){
  candidate.z=THREE.MathUtils.clamp(candidate.z,-106,106);
  return candidate;
 }
+function foundationSurface(x,z){
+ let top=null;
+ for(const b of buildings){
+  if(!['foundation','raisedFoundation'].includes(b.type))continue;
+  const dx=x-b.x,dz=z-b.z,c=Math.cos(b.rotation),sn=Math.sin(b.rotation);
+  const lx=dx*c+dz*sn,lz=-dx*sn+dz*c;
+  if(Math.abs(lx)<=1.47&&Math.abs(lz)<=1.47){
+   const deck=deckY(b)+.29;
+   if(top===null||deck>top)top=deck;
+  }
+ }
+ return top;
+}
+let verticalSpeed=0,grounded=true;
+function jump(){
+ if(!grounded||!craftOverlay.hidden||!inventoryOverlay.hidden||!settingsOverlay.hidden)return;
+ verticalSpeed=5.6;grounded=false;
+}
+document.querySelector('#touchJump').addEventListener('click',jump);
+document.addEventListener('keydown',e=>{if(e.code==='Space'&&!e.repeat&&document.body.classList.contains('in-main-menu')===false){e.preventDefault();jump();}});
 function movePlayer(move,distance){
  // Begrenzte Teilschritte verhindern, dass schnelle Bewegung Hindernisse ueberspringt.
  const count=Math.max(1,Math.ceil(distance/.16)),step=distance/count;
@@ -530,7 +608,7 @@ function selectTool(type){
  updateHotbar();updateInventoryDetail();
 }
 for(const [id,type] of [['slotHands','hands'],['slotAxe','axe'],['slotHammer','hammer']])document.querySelector('#'+id).addEventListener('click',()=>selectTool(type));
-document.querySelector('#slotBuild').addEventListener('click',()=>startPlacement(lastBuildType));
+document.querySelector('#slotBuild').addEventListener('click',()=>{if(placement)cancelPlacement();showBuildMenu();});
 document.querySelector('#craftHammer').addEventListener('click',()=>{
  if(inventory.hammer||inventory.wood<3||inventory.stone<2){toast('Für den Bauhammer brauchst du 3 Holz und 2 Stein.');return;}
  inventory.wood-=3;inventory.stone-=2;inventory.hammer=1;selectTool('hammer');updateInv();saveGame(true);toast('Bauhammer hergestellt.');
@@ -665,11 +743,11 @@ function startPlacement(type){
  const needs=recipes[type].needs;
  if(Object.entries(needs).some(([k,n])=>inventory[k]<n)){toast('Nicht genügend Materialien.');return;}
  closeCraft();placement={type,rotation:0,manualRotation:false,valid:false,groupId:null,mesh:makeBuilding(type,0,0,0,true)};
- document.querySelector('#buildQuick').hidden=false;document.querySelector('#buildInfo').hidden=false;document.querySelector('#buildPalette').hidden=false;document.querySelector('#touchCollect').textContent='✓ BAUEN';updateBuildPalette();
+ document.querySelector('#buildQuick').hidden=false;document.querySelector('#buildInfo').hidden=false;document.querySelector('#buildPalette').hidden=true;document.querySelector('#touchCollect').textContent='✓ BAUEN';updateBuildPalette();
  updatePlacement();toast('Bauvorschau: Drehen antippen = 90°, halten = stufenlos.');
 }
-function updateBuildPalette(){for(const btn of document.querySelectorAll('[data-build]')){btn.classList.toggle('selected',btn.dataset.build===lastBuildType);const needs=recipes[btn.dataset.build].needs;btn.disabled=Object.entries(needs).some(([k,n])=>inventory[k]<n);}}
-document.querySelectorAll('[data-build]').forEach(btn=>btn.addEventListener('click',()=>startPlacement(btn.dataset.build)));
+function updateBuildPalette(){if(!document.querySelector('#buildPalette').hidden)showBuildMenu();}
+
 function rotatePlacement(degrees=90){
  if(!placement)return;
  placement.manualRotation=true;
@@ -828,7 +906,7 @@ function loadGame(){
   });}
   if(Array.isArray(state.campfires))for(const fire of state.campfires.slice(0,100))if(Number.isFinite(fire.x)&&Number.isFinite(fire.z))addCampfire(fire.x,fire.z);
   if(Array.isArray(state.buildings))for(const b of state.buildings.slice(0,150))if(['foundation','raisedFoundation','wall','door','window','stairs','roof','slopedRoof'].includes(b.type)&&Number.isFinite(b.x)&&Number.isFinite(b.z))addBuilding(b.type,b.x,b.z,Number.isFinite(b.rotation)?b.rotation:0,!!b.open,Number.isInteger(b.groupId)?b.groupId:null,Number.isFinite(b.elevation)?b.elevation:null);
-  resolveCollision(player.pos);player.pos.y=terrainHeight(player.pos.x,player.pos.z)+1.7;
+  resolveCollision(player.pos);player.pos.y=terrainHeight(player.pos.x,player.pos.z)+1.7;verticalSpeed=0;grounded=true;
   document.querySelector('#equipAxe').textContent=axeEquipped?'Axt ablegen':'Axt ausrüsten';
   updateInv();document.querySelector('#saveStatus').textContent='Spielstand geladen · automatische Sicherung aktiv';
  }catch(e){document.querySelector('#saveStatus').textContent='Spielstand konnte nicht geladen werden';}
@@ -885,7 +963,12 @@ function animate(now){
   let move=new THREE.Vector3();if(keys.KeyW)move.add(f);if(keys.KeyS)move.sub(f);if(keys.KeyD)move.add(right);if(keys.KeyA)move.sub(right);
   if(coarse){move.addScaledVector(f,-stickVec.y);move.addScaledVector(right,stickVec.x);}
   if(move.lengthSq()>0){move.normalize();const sp=keys.ShiftLeft||keys.ShiftRight||keys.TouchSprint?9:6;movePlayer(move,sp*dt);}
-  player.pos.y=terrainHeight(player.pos.x,player.pos.z)+1.7;
+  const terrain=terrainHeight(player.pos.x,player.pos.z),surface=foundationSurface(player.pos.x,player.pos.z);
+  const currentFeet=player.pos.y-1.7;
+  const floor=surface!==null&&currentFeet>=surface-.38?Math.max(terrain,surface):terrain;
+  verticalSpeed-=15*dt;player.pos.y+=verticalSpeed*dt;
+  if(player.pos.y<=floor+1.7){player.pos.y=floor+1.7;verticalSpeed=0;grounded=true;}
+  else grounded=false;
   player.hunger=Math.max(0,player.hunger-dt*.045);player.thirst=Math.max(0,player.thirst-dt*.07);
   if(player.hunger===0||player.thirst===0)player.health=Math.max(0,player.health-dt*.8);
  }
