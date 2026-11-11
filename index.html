@@ -132,7 +132,7 @@ button:hover{background:#416445}button:disabled{opacity:.35;cursor:not-allowed}
   <div class="stat"><div class="stathead"><span>Durst</span><b id="thirstText">100</b></div><div class="bar"><div class="fill" id="thirstBar" style="background:#62b8df"></div></div></div>
   <div class="small" id="weather">Klar · Tag 1 · 08:00</div><div class="small" id="saveStatus">Noch nicht gespeichert</div>
 </div>
-<div id="minimapPanel" class="panel" aria-label="Minikarte"><div id="mapHeader"><span>🧭 KARTE</span><button id="settingsButton" type="button" aria-label="Spielmenü öffnen" title="Spielmenü">⚙️</button></div><canvas id="minimap" width="240" height="240" aria-label="Minikarte der Spielwelt"></canvas><div id="coords">X 0 · Y 0 · Z 0</div></div>
+<div id="minimapPanel" class="panel" aria-label="Minikarte"><div id="mapHeader"><span>🧭 KARTE</span><span id="mapCompass" style="margin-left:auto;font-size:12px;font-weight:750;color:#ffdd87" aria-label="Kompass">N ↑</span><button id="settingsButton" type="button" aria-label="Spielmenü öffnen" title="Spielmenü">⚙️</button></div><canvas id="minimap" width="240" height="240" aria-label="Minikarte der Spielwelt"></canvas><div id="coords">X 0 · Y 0 · Z 0</div></div>
 <div id="settingsOverlay" hidden><section id="settingsPanel" class="panel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle"><div class="craftHeader"><h3 id="settingsTitle">⚙️ Spielmenü</h3><button id="settingsClose" type="button" aria-label="Spielmenü schliessen">✕</button></div><p class="small">Dein Spielstand wird zusätzlich automatisch alle 20 Sekunden gespeichert.</p><button id="settingsSave" type="button">💾 Spielstand jetzt speichern</button><div id="settingsSaveStatus" role="status">Noch nicht manuell gespeichert</div><hr><div class="small" style="font-weight:700;margin:8px 0">🎮 Grafikqualität</div>
 <label for="graphicsQuality" class="small">Qualitätsstufe</label>
 <select id="graphicsQuality" style="width:100%;padding:12px;border-radius:9px;background:#21372a;color:white;border:1px solid #66816b">
@@ -160,6 +160,7 @@ button:hover{background:#416445}button:disabled{opacity:.35;cursor:not-allowed}
    <button class="craftChoice selected" data-recipe="axe" type="button">🪓 Steinaxt<span>Werkzeug zum Holzfällen</span></button>
    <button class="craftChoice" data-recipe="hammer" type="button">🔨 Bauhammer<span>Gebäudeteile entfernen</span></button>
    <button class="craftChoice" data-recipe="fire" type="button">🔥 Lagerfeuer<span>Mit Platzierungsvorschau</span></button>
+   <button class="craftChoice" data-recipe="bed" type="button">🛏️ Bett<span>Zuhause und Traumreisen</span></button>
    <button class="craftChoice" data-recipe="foundation" type="button">🪵 Fundament<span>Basis für deine Hütte</span></button>
    <button class="craftChoice" data-recipe="raisedFoundation" type="button">🏗️ Erhöhtes Fundament<span>Plattform auf Stützen</span></button>
    <button class="craftChoice" data-recipe="wall" type="button">🧱 Holzwand<span>Rastet am Fundament ein</span></button>
@@ -175,6 +176,7 @@ button:hover{background:#416445}button:disabled{opacity:.35;cursor:not-allowed}
    <div id="recipeMaterials"></div>
    <div id="recipeAxe" class="recipe"><button id="craftAxe" type="button">Steinaxt herstellen</button><button id="equipAxe" type="button" disabled>Axt ausrüsten</button></div>
    <div id="recipeHammer" class="recipe" hidden><button id="craftHammer" type="button">Bauhammer herstellen</button></div>
+   <div id="recipeBed" class="recipe" hidden><button id="buildBed" type="button">Bett platzieren</button></div>
    <div id="recipeFire" class="recipe" hidden><button id="campfire" type="button">Lagerfeuer platzieren</button></div>
    <div id="recipeFoundation" class="recipe" hidden><button id="buildFoundation" type="button">Fundament platzieren</button></div>
    <div id="recipeRaisedFoundation" class="recipe" hidden><button id="buildRaisedFoundation" type="button">Erhöhtes Fundament platzieren</button></div>
@@ -523,6 +525,7 @@ function updateInv(){
  document.querySelector('#buildSlopedRoof').disabled=inventory.wood<11;
  document.querySelector('#buildWindow').disabled=inventory.wood<7;
  document.querySelector('#buildStairs').disabled=inventory.wood<6;
+ document.querySelector('#buildBed').disabled=inventory.wood<8||inventory.stone<2;
  // Beeren werden ausschliesslich über das Inventar gegessen.
  updateInventoryDetail();updateRecipeView();
 }
@@ -533,6 +536,7 @@ function updateRecipeView(){
  document.querySelector('#recipeMaterials').innerHTML=Object.entries(recipe.needs).map(([key,required])=>`<div class="material ${inventory[key]<required?'missing':''}"><span>${labels[key]}</span><strong>${inventory[key]} / ${required} ${inventory[key]>=required?'✓':'✕'}</strong></div>`).join('');
  document.querySelector('#recipeAxe').hidden=selectedRecipe!=='axe';
  document.querySelector('#recipeFire').hidden=selectedRecipe!=='fire';
+ document.querySelector('#recipeBed').hidden=selectedRecipe!=='bed';
  document.querySelector('#recipeHammer').hidden=selectedRecipe!=='hammer';
  document.querySelector('#recipeFoundation').hidden=selectedRecipe!=='foundation';
  document.querySelector('#recipeRaisedFoundation').hidden=selectedRecipe!=='raisedFoundation';
@@ -1061,7 +1065,7 @@ function confirmPlacement(){
  if(Object.entries(needs).some(([k,n])=>inventory[k]<n)){cancelPlacement();toast(`${recipes[type].title} gebaut · Material für weitere fehlt.`);return;}
  updateBuildPalette();updatePlacement();toast(`${recipes[type].title} gebaut · weitere Platzierung aktiv.`);
 }
-for(const [id,type] of [['campfire','fire'],['buildFoundation','foundation'],['buildRaisedFoundation','raisedFoundation'],['buildWall','wall'],['buildDoor','door'],['buildWindow','window'],['buildStairs','stairs'],['buildRoof','roof'],['buildSlopedRoof','slopedRoof']])document.querySelector('#'+id).addEventListener('click',()=>startPlacement(type));
+for(const [id,type] of [['campfire','fire'],['buildBed','bed'],['buildFoundation','foundation'],['buildRaisedFoundation','raisedFoundation'],['buildWall','wall'],['buildDoor','door'],['buildWindow','window'],['buildStairs','stairs'],['buildRoof','roof'],['buildSlopedRoof','slopedRoof']])document.querySelector('#'+id).addEventListener('click',()=>startPlacement(type));
 // Tap: 90 degrees. Long press: smooth continuous rotation until released.
 const rotateButton=document.querySelector('#buildRotate');
 let rotationPress=null;
@@ -1228,6 +1232,9 @@ function drawMinimap(now){
  for(const p of WORLD_LANDMARKS){if(Math.abs(p.x-centerX)<range/2&&Math.abs(p.z-centerZ)<range/2){c.fillStyle='#e7c86c';c.fillRect(px(p.x)-3,pz(p.z)-3,6,6);}}
  c.save();c.translate(w/2,h/2);c.rotate(-yaw);c.fillStyle='#fff6ab';c.strokeStyle='#111';c.lineWidth=1.3;
  c.beginPath();c.moveTo(0,-8);c.lineTo(-5,6);c.lineTo(5,6);c.closePath();c.fill();c.stroke();c.restore();
+ const heading=(((-yaw*180/Math.PI)%360)+360)%360;
+ const cardinal=['N','NO','O','SO','S','SW','W','NW'][Math.round(heading/45)%8];
+ document.querySelector('#mapCompass').textContent='🧭 '+cardinal+' · '+Math.round(heading)+'°';
  document.querySelector('#coords').textContent=`X ${player.pos.x.toFixed(1)} · Y ${(player.pos.y-1.7).toFixed(1)} · Z ${player.pos.z.toFixed(1)}`;
 }
 
