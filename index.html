@@ -725,6 +725,26 @@ function resolveCollision(candidate){
     candidate.x=o.mesh.position.x+nx*min;candidate.z=o.mesh.position.z+nz*min;corrected=true;
    }
   }
+  // Raised foundations have a solid deck: stop walking through its sides or underside.
+  for(const b of buildings){
+   if(b.type!=='raisedFoundation')continue;
+   const deck=deckY(b),feet=player.pos.y-1.7,head=player.pos.y;
+   if(feet>=deck+.18||head<=deck-.15)continue;
+   const c=Math.cos(b.rotation),sn=Math.sin(b.rotation);
+   const dx=candidate.x-b.x,dz=candidate.z-b.z;
+   const lx=dx*c+dz*sn,lz=-dx*sn+dz*c;
+   const nearX=Math.max(-1.5,Math.min(1.5,lx)),nearZ=Math.max(-1.5,Math.min(1.5,lz));
+   const vx=lx-nearX,vz=lz-nearZ,d2=vx*vx+vz*vz;
+   if(d2<radius*radius){
+    let pushX=0,pushZ=0;
+    if(d2>1e-8){const d=Math.sqrt(d2);pushX=vx*(radius-d)/d;pushZ=vz*(radius-d)/d;}
+    else{
+     const gapX=1.5+radius-Math.abs(lx),gapZ=1.5+radius-Math.abs(lz);
+     if(gapX<gapZ)pushX=(lx>=0?1:-1)*gapX;else pushZ=(lz>=0?1:-1)*gapZ;
+    }
+    candidate.x+=pushX*c-pushZ*sn;candidate.z+=pushX*sn+pushZ*c;corrected=true;
+   }
+  }
   // Oriented wall / door slabs: circle against a finite rotated rectangle.
   // Door leaves stop blocking the opening when opened.
   for(const b of buildings){
@@ -1021,6 +1041,7 @@ function updatePlacement(){
   }
  }
  p.groupId=groupId;
+ // Build pieces inherit the actual top surface of raised platforms.
  p.elevation=support?deckY(support):(FOUNDATION_TYPES.includes(p.type)?terrainTop(x,z,rotation)+(FLOOR_OFFSET[p.type]||0):terrainHeight(x,z));
  p.mesh.position.set(x,p.elevation-(FLOOR_OFFSET[p.type]||0),z);p.mesh.rotation.y=rotation;
  setSupportPosts(p.mesh,p.type,x,z,rotation,true);
@@ -1249,8 +1270,10 @@ function animate(now){
   if(move.lengthSq()>0){move.normalize();const sp=keys.ShiftLeft||keys.ShiftRight||keys.TouchSprint?9:6;movePlayer(move,sp*dt);}
   const terrain=terrainHeight(player.pos.x,player.pos.z),surface=foundationSurface(player.pos.x,player.pos.z);
   const currentFeet=player.pos.y-1.7;
-  const floor=surface!==null&&currentFeet>=surface-.38?Math.max(terrain,surface):terrain;
   verticalSpeed-=15*dt;player.pos.y+=verticalSpeed*dt;
+  const nextFeet=player.pos.y-1.7;
+  const landingOnDeck=surface!==null&&verticalSpeed<=0&&currentFeet>=surface-.08&&nextFeet<=surface;
+  const floor=landingOnDeck?Math.max(terrain,surface):terrain;
   if(player.pos.y<=floor+1.7){player.pos.y=floor+1.7;verticalSpeed=0;grounded=true;}
   else grounded=false;
   player.hunger=Math.max(0,player.hunger-dt*.045);player.thirst=Math.max(0,player.thirst-dt*.07);
