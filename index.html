@@ -96,7 +96,7 @@ button:hover{background:#416445}button:disabled{opacity:.35;cursor:not-allowed}
 <body class="in-main-menu">
 <div id="game"></div>
 <div id="start"><div class="card panel">
-<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.4.2</div>
+<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.6.0</div>
 <p>Erkunde eine unebene Waldlandschaft, sammle Rohstoffe, stelle eine Axt her und bearbeite Bäume und Felsen. Dies bleibt vorerst ein lokaler Einzelspieler-Prototyp.</p>
 <p><b>WASD</b> bewegen · <b>Maus</b> umsehen · <b>E</b> sammeln · <b>Shift</b> sprinten · <b>I</b> Inventar · <b>C</b> Crafting · <b>1–4</b> Schnellauswahl · <b>R</b> drehen · <b>E</b> platzieren · <b>Esc</b> Maus lösen</p>
 <button id="play" type="button" disabled>SPIEL LADEN …</button><p id="menuStatus" class="small" role="status">Spielwelt wird vorbereitet …</p>
@@ -110,7 +110,14 @@ button:hover{background:#416445}button:disabled{opacity:.35;cursor:not-allowed}
   <div class="small" id="weather">Klar · Tag 1 · 08:00</div><div class="small" id="saveStatus">Noch nicht gespeichert</div>
 </div>
 <div id="minimapPanel" class="panel" aria-label="Minikarte"><div id="mapHeader"><span>🧭 KARTE</span><button id="settingsButton" type="button" aria-label="Spielmenü öffnen" title="Spielmenü">⚙️</button></div><canvas id="minimap" width="240" height="240" aria-label="Minikarte der Spielwelt"></canvas><div id="coords">X 0 · Y 0 · Z 0</div></div>
-<div id="settingsOverlay" hidden><section id="settingsPanel" class="panel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle"><div class="craftHeader"><h3 id="settingsTitle">⚙️ Spielmenü</h3><button id="settingsClose" type="button" aria-label="Spielmenü schliessen">✕</button></div><p class="small">Dein Spielstand wird zusätzlich automatisch alle 20 Sekunden gespeichert.</p><button id="settingsSave" type="button">💾 Spielstand jetzt speichern</button><div id="settingsSaveStatus" role="status">Noch nicht manuell gespeichert</div><hr><button type="button" disabled class="disabledFeature">🎮 Grafikeinstellungen (später)</button><button type="button" disabled class="disabledFeature">👥 Freunde & Multiplayer (später)</button><button type="button" disabled class="disabledFeature">🔊 Audioeinstellungen (später)</button></section></div><div id="crosshair"></div><div id="prompt"></div>
+<div id="settingsOverlay" hidden><section id="settingsPanel" class="panel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle"><div class="craftHeader"><h3 id="settingsTitle">⚙️ Spielmenü</h3><button id="settingsClose" type="button" aria-label="Spielmenü schliessen">✕</button></div><p class="small">Dein Spielstand wird zusätzlich automatisch alle 20 Sekunden gespeichert.</p><button id="settingsSave" type="button">💾 Spielstand jetzt speichern</button><div id="settingsSaveStatus" role="status">Noch nicht manuell gespeichert</div><hr><div class="small" style="font-weight:700;margin:8px 0">🎮 Grafikqualität</div>
+<label for="graphicsQuality" class="small">Qualitätsstufe</label>
+<select id="graphicsQuality" style="width:100%;padding:12px;border-radius:9px;background:#21372a;color:white;border:1px solid #66816b">
+<option value="low">Sparmodus – für langsamere Smartphones</option>
+<option value="medium">Ausgeglichen</option>
+<option value="high">Hoch – bessere Darstellung</option>
+</select>
+<div class="small" id="graphicsInfo" role="status" style="margin:8px 0">Grafik wird beim Wechsel sofort angepasst.</div><button type="button" disabled class="disabledFeature">👥 Freunde & Multiplayer (später)</button><button type="button" disabled class="disabledFeature">🔊 Audioeinstellungen (später)</button></section></div><div id="crosshair"></div><div id="prompt"></div>
 <button id="inventoryOpen" type="button" aria-haspopup="dialog" aria-controls="inventoryOverlay">🎒 Inventar</button>
 <div id="inventoryOverlay" hidden>
  <section id="inventory" class="panel" role="dialog" aria-modal="true" aria-labelledby="inventoryTitle">
@@ -197,6 +204,8 @@ window.addEventListener('error',function(e){if(!window.wildFrontierReady){const 
 })();
 </script>
 <script type="module">
+import {riverCenter,riverDistance,inRiver,safeResourcePosition,terrainHeight} from "./src/terrain.js";
+import {createGraphicsSettings} from "./src/graphics.js";
 let THREE;
 const sources=[
  'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js',
@@ -231,6 +240,9 @@ renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 root.appendChild(renderer.domElement);
 scene.add(new THREE.HemisphereLight(0xc9e6ff,0x35442b,1.65));
 const sun=new THREE.DirectionalLight(0xffedcf,2.0);sun.position.set(-25,38,18);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.left=-55;sun.shadow.camera.right=55;sun.shadow.camera.top=55;sun.shadow.camera.bottom=-55;scene.add(sun);
+const graphics=createGraphicsSettings({renderer,scene,camera,sun});
+document.querySelector('#graphicsQuality').addEventListener('change',e=>graphics.setQuality(e.target.value));
+graphics.setQuality(graphics.getQuality());
 
 const mats={
  grass:new THREE.MeshStandardMaterial({color:0x54794a,roughness:1}),
@@ -242,23 +254,6 @@ const mats={
  wood:new THREE.MeshStandardMaterial({color:0x9a7048}),
  fire:new THREE.MeshStandardMaterial({color:0xff9d36,emissive:0xff4b08,emissiveIntensity:2})
 };
-function riverCenter(x){
- const u=Math.max(0,Math.min(29,(x+95)/6)),i=Math.min(28,Math.floor(u)),t=u-i;
- return (Math.sin(i*.38)*(1-t)+Math.sin((i+1)*.38)*t)*13+23;
-}
-function riverDistance(x,z){return Math.abs(z-riverCenter(x));}
-function inRiver(x,z,margin=0){return x>=-95-margin&&x<=79+margin&&riverDistance(x,z)<5+margin;}
-function safeResourcePosition(x,z){
- if(inRiver(x,z,2.3)){const center=riverCenter(x);z=center+(z<center?-1:1)*9;}
- return {x,z};
-}
-function terrainHeight(x,z){
- const hill=Math.exp(-(((x-64)/19)**2+((z+54)/16)**2)*1.6)*8;
- const broad=2.2*Math.sin(x*.028)*Math.cos(z*.026)+1.35*Math.sin((x+z)*.039)+.85*Math.cos(z*.055);
- const detail=.38*Math.sin(x*.14)*Math.cos(z*.12);
- const riverBlend=Math.min(1,Math.max(0,(riverDistance(x,z)-5)/17));
- return (broad+detail)*(.22+.78*riverBlend)+hill;
-}
 const groundGeo=new THREE.PlaneGeometry(220,220,220,220);groundGeo.rotateX(-Math.PI/2);
 const posAttr=groundGeo.attributes.position;for(let i=0;i<posAttr.count;i++){const x=posAttr.getX(i),z=posAttr.getZ(i);posAttr.setY(i,terrainHeight(x,z));}
 groundGeo.computeVertexNormals();const ground=new THREE.Mesh(groundGeo,mats.grass);ground.receiveShadow=true;scene.add(ground);
@@ -342,7 +337,7 @@ function updateInv(){
  document.querySelector('#buildRoof').disabled=inventory.wood<9;
  document.querySelector('#buildWindow').disabled=inventory.wood<7;
  document.querySelector('#buildStairs').disabled=inventory.wood<6;
- document.querySelector('#eat').disabled=inventory.berries<3;
+ // Beeren werden ausschliesslich über das Inventar gegessen.
  updateInventoryDetail();updateRecipeView();
 }
 function updateRecipeView(){
@@ -379,7 +374,7 @@ document.querySelector('#inventoryOpen').addEventListener('click',openInventory)
 document.querySelector('#inventoryClose').addEventListener('click',()=>closeInventory());
 inventoryOverlay.addEventListener('pointerdown',e=>{if(e.target===inventoryOverlay)closeInventory();});
 document.querySelector('#items').addEventListener('click',e=>{const btn=e.target.closest('[data-item]');if(btn){selectedItem=btn.dataset.item;updateInventoryDetail();}});
-document.querySelector('#inventoryUse').addEventListener('click',()=>{if(selectedItem==='axe')selectTool('axe');if(selectedItem==='hammer')selectTool('hammer');if(selectedItem==='berries')document.querySelector('#eat').click();updateInventoryDetail();});
+document.querySelector('#inventoryUse').addEventListener('click',()=>{if(selectedItem==='axe')selectTool('axe');if(selectedItem==='hammer')selectTool('hammer');if(selectedItem==='berries'){if(inventory.berries<3){toast('Du brauchst 3 Beeren.');return;}inventory.berries-=3;player.hunger=Math.min(100,player.hunger+20);bar('hunger',player.hunger);updateInv();saveGame(true);toast('3 Beeren gegessen: +20 Hunger.');}updateInventoryDetail();});
 const craftOverlay=document.querySelector('#craftOverlay');
 let resumePointerLock=false;
 function openCraft(){

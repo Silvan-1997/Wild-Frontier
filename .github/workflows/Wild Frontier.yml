@@ -40,3 +40,10 @@ jobs:
           for file in /tmp/wf-script-*.mjs; do
             node --check "$file"
           done
+
+      - name: JavaScript-Module prüfen
+        run: |
+          node --check src/terrain.js
+          node --check src/graphics.js
+          node --check test.mjs
+          node test.mjs
