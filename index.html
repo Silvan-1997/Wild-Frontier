@@ -637,7 +637,12 @@ function makeBuilding(type,x,z,rotation=0,ghost=false){
 }
 function addBuilding(type,x,z,rotation=0,open=false,groupId=null){
  if(type==='fire'){addCampfire(x,z);return;}
- const mesh=makeBuilding(type,x,z,rotation);const b={type,x,z,rotation,mesh,open:!!open,groupId:groupId??nextBuildingGroup++};if(type==='door')mesh.userData.doorHinge.rotation.y=b.open?Math.PI/2:0;buildings.push(b);
+ const mesh=makeBuilding(type,x,z,rotation);
+ if(['wall','door','window','stairs','roof','slopedRoof'].includes(type)){
+  const base=buildings.filter(b=>b.type==='raisedFoundation'&&(groupId===null||b.groupId===groupId)).sort((a,b)=>distXZ(a,{x,z})-distXZ(b,{x,z}))[0];
+  if(base&&distXZ(base,{x,z})<2.6)mesh.position.y+=1.2;
+ }
+ const b={type,x,z,rotation,mesh,open:!!open,groupId:groupId??nextBuildingGroup++};if(type==='door')mesh.userData.doorHinge.rotation.y=b.open?Math.PI/2:0;buildings.push(b);
 }
 function startPlacement(type){
  if(placement)cancelPlacement();
@@ -694,7 +699,7 @@ function updatePlacement(){
   }
  }
  p.groupId=groupId;
- p.mesh.position.set(x,terrainHeight(x,z),z);p.mesh.rotation.y=rotation;
+ p.mesh.position.set(x,terrainHeight(x,z)+(support?.type==='raisedFoundation'?1.2:0),z);p.mesh.rotation.y=rotation;
  p.rotation=rotation;
  const radius=p.type==='fire'?1:1.4;
  let valid=Math.abs(x)<104&&Math.abs(z)<104&&!inRiver(x,z,radius);
