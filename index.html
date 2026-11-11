@@ -113,7 +113,7 @@ button:hover{background:#416445}button:disabled{opacity:.35;cursor:not-allowed}
 <body class="in-main-menu">
 <div id="game"></div>
 <div id="start"><div class="card panel">
-<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.8.14</div>
+<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.8.15</div>
 <p>Erkunde eine unebene Waldlandschaft, sammle Rohstoffe, stelle eine Axt her und bearbeite Bäume und Felsen. Deine private Survival-Welt wird mit deinem Konto online gespeichert.</p>
 <p><b>WASD</b> bewegen · <b>Maus</b> umsehen · <b>E</b> sammeln · <b>Shift</b> sprinten · <b>I</b> Inventar · <b>C</b> Crafting · <b>1–4</b> Schnellauswahl · <b>R</b> drehen · <b>E</b> platzieren · <b>Esc</b> Maus lösen</p>
 <section id="cloudLogin" style="margin:14px auto;padding:12px;border:1px solid #658c6d;border-radius:10px;max-width:400px;background:#10231b">
@@ -725,26 +725,26 @@ function resolveCollision(candidate){
     candidate.x=o.mesh.position.x+nx*min;candidate.z=o.mesh.position.z+nz*min;corrected=true;
    }
   }
-  // Raised foundations have a solid deck: stop walking through its sides or underside.
+  // Raised foundations: solid horizontal footprint below the platform.
+  // Keep the player on the outside of the 3x3 m footprint while below its deck.
   for(const b of buildings){
    if(b.type!=='raisedFoundation')continue;
    const feet=player.pos.y-1.7;
-   // The entire space below the raised platform is solid for collision.
-   if(feet>=deckSurface(b)-.06)continue;
+   if(feet>=deckSurface(b)-.10)continue;
    const c=Math.cos(b.rotation),sn=Math.sin(b.rotation);
    const dx=candidate.x-b.x,dz=candidate.z-b.z;
-   const lx=dx*c+dz*sn,lz=-dx*sn+dz*c;
-   const nearX=Math.max(-1.5,Math.min(1.5,lx)),nearZ=Math.max(-1.5,Math.min(1.5,lz));
-   const vx=lx-nearX,vz=lz-nearZ,d2=vx*vx+vz*vz;
-   if(d2<radius*radius){
-    let pushX=0,pushZ=0;
-    if(d2>1e-8){const d=Math.sqrt(d2);pushX=vx*(radius-d)/d;pushZ=vz*(radius-d)/d;}
-    else{
-     const gapX=1.5+radius-Math.abs(lx),gapZ=1.5+radius-Math.abs(lz);
-     if(gapX<gapZ)pushX=(lx>=0?1:-1)*gapX;else pushZ=(lz>=0?1:-1)*gapZ;
-    }
-    candidate.x+=pushX*c-pushZ*sn;candidate.z+=pushX*sn+pushZ*c;corrected=true;
-   }
+   let lx=dx*c+dz*sn,lz=-dx*sn+dz*c;
+   const bound=1.5+radius;
+   if(Math.abs(lx)>=bound||Math.abs(lz)>=bound)continue;
+   // Choose the nearest exit; prefer the approach side if already outside.
+   const oldX=player.pos.x-b.x,oldZ=player.pos.z-b.z;
+   const oldLX=oldX*c+oldZ*sn,oldLZ=-oldX*sn+oldZ*c;
+   if(Math.abs(oldLX)>=bound&&Math.abs(oldLZ)<bound)lx=Math.sign(oldLX)*bound;
+   else if(Math.abs(oldLZ)>=bound&&Math.abs(oldLX)<bound)lz=Math.sign(oldLZ)*bound;
+   else if(bound-Math.abs(lx)<bound-Math.abs(lz))lx=(lx>=0?bound:-bound);
+   else lz=(lz>=0?bound:-bound);
+   candidate.x=b.x+lx*c-lz*sn;candidate.z=b.z+lx*sn+lz*c;
+   corrected=true;
   }
   // Oriented wall / door slabs: circle against a finite rotated rectangle.
   // Door leaves stop blocking the opening when opened.
