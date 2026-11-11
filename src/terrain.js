@@ -14,5 +14,12 @@ export function terrainHeight(x,z){
  const broad=2.2*Math.sin(x*.028)*Math.cos(z*.026)+1.35*Math.sin((x+z)*.039)+.85*Math.cos(z*.055);
  const detail=.38*Math.sin(x*.14)*Math.cos(z*.12);
  const riverBlend=Math.min(1,Math.max(0,(riverDistance(x,z)-5)/17));
- return (broad+detail)*(.22+.78*riverBlend)+hill;
+ const legacy=(broad+detail)*(.22+.78*riverBlend)+hill;
+ // Keep the original 220 m starter area bit-for-bit compatible with existing saves.
+ const edge=Math.max(Math.abs(x),Math.abs(z));
+ if(edge<=110)return legacy;
+ const fade=Math.min(1,Math.max(0,(edge-110)/100));
+ const smooth=fade*fade*(3-2*fade);
+ const ridges=7*Math.sin(x*.0031)*Math.cos(z*.0043)+4*Math.sin((x+z)*.0087)+2*Math.cos(z*.019);
+ return legacy*(1-smooth)+(legacy+ridges)*smooth;
 }
