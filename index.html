@@ -132,12 +132,7 @@ button:hover{background:#416445}button:disabled{opacity:.35;cursor:not-allowed}
   <div class="stat"><div class="stathead"><span>Durst</span><b id="thirstText">100</b></div><div class="bar"><div class="fill" id="thirstBar" style="background:#62b8df"></div></div></div>
   <div class="small" id="weather">Klar · Tag 1 · 08:00</div><div class="small" id="saveStatus">Noch nicht gespeichert</div>
 </div>
-<div id="homeCompass" style="position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:5;background:#102019d9;border:1px solid #9cb79a88;border-radius:12px;padding:7px 12px;text-align:center;pointer-events:auto;min-width:190px;font-size:12px;box-shadow:0 3px 14px #0007">
- <div style="font-weight:800;letter-spacing:.14em" id="compassHeading">N · 0°</div>
- <div id="homeBearing" style="color:#ffdb88">⌂ Zuhause · 8 m ↑</div>
- <button id="setHome" type="button" style="font-size:10px;padding:3px 8px;margin-top:4px;background:#38563b;color:white;border:1px solid #89a58a;border-radius:6px">⌂ Hier Zuhause setzen</button>
-</div>
-<div id="minimapPanel" class="panel" aria-label="Minikarte"><div id="mapHeader"><span>🧭 KARTE</span><button id="settingsButton" type="button" aria-label="Spielmenü öffnen" title="Spielmenü">⚙️</button></div><canvas id="minimap" width="240" height="240" aria-label="Minikarte der Spielwelt"></canvas><div id="coords">X 0 · Y 0 · Z 0</div></div>
+<div id="minimapPanel" class="panel" aria-label="Minikarte"><div id="mapHeader"><span>🧭 KARTE</span><button id="setHome" type="button" title="Aktuelle Position als Zuhause speichern" aria-label="Hier Zuhause setzen" style="font-size:12px;padding:5px 7px;margin-left:auto;background:#365c3a">⌂ Setzen</button><button id="settingsButton" type="button" aria-label="Spielmenü öffnen" title="Spielmenü">⚙️</button></div><canvas id="minimap" width="240" height="240" aria-label="Minikarte der Spielwelt"></canvas><div id="coords">X 0 · Y 0 · Z 0</div></div>
 <div id="settingsOverlay" hidden><section id="settingsPanel" class="panel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle"><div class="craftHeader"><h3 id="settingsTitle">⚙️ Spielmenü</h3><button id="settingsClose" type="button" aria-label="Spielmenü schliessen">✕</button></div><p class="small">Dein Spielstand wird zusätzlich automatisch alle 20 Sekunden gespeichert.</p><button id="settingsSave" type="button">💾 Spielstand jetzt speichern</button><div id="settingsSaveStatus" role="status">Noch nicht manuell gespeichert</div><hr><div class="small" style="font-weight:700;margin:8px 0">🎮 Grafikqualität</div>
 <label for="graphicsQuality" class="small">Qualitätsstufe</label>
 <select id="graphicsQuality" style="width:100%;padding:12px;border-radius:9px;background:#21372a;color:white;border:1px solid #66816b">
@@ -1182,32 +1177,31 @@ function drawMinimap(now){
   c.fillStyle=o.type==='wood'?'#a7d18d':o.type==='stone'?'#c4c6c3':'#d8566b';c.fillRect(px(x)-1,pz(z)-1,2.5,2.5);
  }
  c.fillStyle='#e0b57b';for(const b of buildings)c.fillRect(px(b.x)-2,pz(b.z)-2,4,4);
- c.fillStyle='#ffdb88';if(Math.abs(homePosition.x-centerX)<range/2&&Math.abs(homePosition.z-centerZ)<range/2){c.beginPath();c.arc(px(homePosition.x),pz(homePosition.z),4,0,Math.PI*2);c.fill();}
+ // Home is always visible: pin to the minimap edge when outside the visible area.
+ const hx=px(homePosition.x),hz=pz(homePosition.z),pad=15;
+ const homeOnMap=hx>=pad&&hx<=w-pad&&hz>=pad&&hz<=h-pad;
+ const markerX=Math.max(pad,Math.min(w-pad,hx)),markerZ=Math.max(pad,Math.min(h-pad,hz));
+ c.save();c.translate(markerX,markerZ);
+ c.shadowColor='#000';c.shadowBlur=5;c.lineWidth=2;c.strokeStyle='#1c241b';c.fillStyle='#ffdc79';
+ // House roof, walls and door, legible at mobile minimap size.
+ c.beginPath();c.moveTo(-8,-1);c.lineTo(0,-9);c.lineTo(8,-1);c.closePath();c.fill();c.stroke();
+ c.fillRect(-6,-1,12,10);c.strokeRect(-6,-1,12,10);
+ c.fillStyle='#554629';c.fillRect(-2,3,4,6);
+ if(!homeOnMap){
+  c.shadowBlur=0;c.fillStyle='#ffdc79';c.font='bold 10px system-ui';c.textAlign='center';
+  c.fillText(Math.round(Math.hypot(homePosition.x-centerX,homePosition.z-centerZ))+'m',0,22>h-markerZ? -13:21);
+ }
+ c.restore();
  for(const p of WORLD_LANDMARKS){if(Math.abs(p.x-centerX)<range/2&&Math.abs(p.z-centerZ)<range/2){c.fillStyle='#e7c86c';c.fillRect(px(p.x)-3,pz(p.z)-3,6,6);}}
  c.save();c.translate(w/2,h/2);c.rotate(-yaw);c.fillStyle='#fff6ab';c.strokeStyle='#111';c.lineWidth=1.3;
  c.beginPath();c.moveTo(0,-8);c.lineTo(-5,6);c.lineTo(5,6);c.closePath();c.fill();c.stroke();c.restore();
  document.querySelector('#coords').textContent=`X ${player.pos.x.toFixed(1)} · Y ${(player.pos.y-1.7).toFixed(1)} · Z ${player.pos.z.toFixed(1)}`;
 }
-const compassHeading=document.querySelector('#compassHeading');
-const homeBearing=document.querySelector('#homeBearing');
 document.querySelector('#setHome').addEventListener('click',()=>{
  homePosition={x:player.pos.x,z:player.pos.z};
  saveGame(true);
- toast('⌂ Neuer Heimatpunkt gespeichert.');
+ toast('⌂ Zuhause markiert und in der Cloud gespeichert.');
 });
-function updateCompass(){
- const angle=(((-yaw*180/Math.PI)%360)+360)%360;
- const direction=['N','NO','O','SO','S','SW','W','NW'][Math.round(angle/45)%8];
- compassHeading.textContent=direction+' · '+Math.round(angle)+'°';
- const dx=homePosition.x-player.pos.x,dz=homePosition.z-player.pos.z;
- const distance=Math.hypot(dx,dz);
- // Forward vector is (-sin(yaw), -cos(yaw)); angle difference gives screen bearing.
- const forwardAngle=Math.atan2(-dx,-dz);
- let relative=forwardAngle-yaw;
- relative=Math.atan2(Math.sin(relative),Math.cos(relative));
- const symbol=Math.abs(relative)<.35?'↑':Math.abs(relative)>2.8?'↓':relative>0?'←':'→';
- homeBearing.textContent='⌂ Zuhause · '+Math.round(distance)+' m '+symbol;
-}
 let last=performance.now();
 function animate(now){
  requestAnimationFrame(animate);const dt=Math.min((now-last)/1000,.05);last=now;elapsed+=dt;
@@ -1227,7 +1221,7 @@ function animate(now){
   if(player.hunger===0||player.thirst===0)player.health=Math.max(0,player.health-dt*.8);
  }
  for(const o of objects){if(o.active===false&&o.respawnAt&&Date.now()>=o.respawnAt){o.active=true;o.respawnAt=0;o.hp=o.maxHp;o.mesh.visible=true;}}
- updatePlacement();drawMinimap(now);updateCompass();
+ updatePlacement();drawMinimap(now);
  const canDrink=inRiver(player.pos.x,player.pos.z,1.3)&&settingsOverlay.hidden&&craftOverlay.hidden&&inventoryOverlay.hidden&&!placement;
  document.querySelector('#drinkNearby').hidden=!canDrink;
  camera.position.copy(player.pos);camera.rotation.order='YXZ';camera.rotation.y=yaw;camera.rotation.x=pitch;
