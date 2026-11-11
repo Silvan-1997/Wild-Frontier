@@ -664,8 +664,7 @@ function resolveCollision(candidate){
   }
   if(!corrected)break;
  }
- candidate.x=THREE.MathUtils.clamp(candidate.x,-106,106);
- candidate.z=THREE.MathUtils.clamp(candidate.z,-106,106);
+ // Open-world movement: no legacy 220 m boundary.
  return candidate;
 }
 function foundationSurface(x,z){
@@ -1067,18 +1066,29 @@ function nearestPrompt(){
 const minimap=document.querySelector('#minimap'),mapCtx=minimap.getContext('2d');
 let lastMapDraw=0;
 function drawMinimap(now){
- if(now-lastMapDraw<180)return;lastMapDraw=now;
- const c=mapCtx,w=c.canvas.width,h=c.canvas.height,scale=w/220;
+ if(now-lastMapDraw<220)return;lastMapDraw=now;
+ const c=mapCtx,w=c.canvas.width,h=c.canvas.height,range=240,scale=w/range;
+ const centerX=player.pos.x,centerZ=player.pos.z;
+ const px=x=>w/2+(x-centerX)*scale,pz=z=>h/2+(z-centerZ)*scale;
  c.clearRect(0,0,w,h);c.fillStyle='#29462a';c.fillRect(0,0,w,h);
- const px=x=>(x+110)*scale,pz=z=>(z+110)*scale;
- // Height contours show the shape of the new hills.
- for(let z=-108;z<108;z+=6)for(let x=-108;x<108;x+=6){
-  const elevation=terrainHeight(x,z);c.fillStyle=elevation>3?'#68704b':elevation>1.4?'#536847':'#365636';c.fillRect(px(x),pz(z),6*scale+1,6*scale+1);
+ const step=8;
+ const minX=Math.floor((centerX-range/2)/step)*step,minZ=Math.floor((centerZ-range/2)/step)*step;
+ for(let z=minZ;z<centerZ+range/2;z+=step)for(let x=minX;x<centerX+range/2;x+=step){
+  const elevation=terrainHeight(x,z);
+  c.fillStyle=elevation>7?'#777c6a':elevation>3?'#68704b':elevation>1.4?'#536847':'#365636';
+  c.fillRect(px(x),pz(z),step*scale+1,step*scale+1);
  }
- c.strokeStyle='#4aa2c4';c.lineWidth=11*scale;c.beginPath();for(let x=-95;x<=79;x+=2){const z=riverCenter(x);if(x===-95)c.moveTo(px(x),pz(z));else c.lineTo(px(x),pz(z));}c.stroke();
- for(const o of objects){if(o.active===false)continue;const x=o.mesh.position.x,z=o.mesh.position.z;if(x<-110||x>110||z<-110||z>110)continue;c.fillStyle=o.type==='wood'?'#a7d18d':o.type==='stone'?'#c4c6c3':'#d8566b';c.fillRect(px(x)-1,pz(z)-1,2.5,2.5);}
+ c.strokeStyle='#4aa2c4';c.lineWidth=10*scale;c.beginPath();
+ for(let x=Math.max(-95,minX);x<=Math.min(79,centerX+range/2);x+=2){
+  const z=riverCenter(x);if(x===Math.max(-95,minX))c.moveTo(px(x),pz(z));else c.lineTo(px(x),pz(z));
+ }c.stroke();
+ for(const o of objects){if(o.active===false)continue;const x=o.mesh.position.x,z=o.mesh.position.z;
+  if(Math.abs(x-centerX)>range/2||Math.abs(z-centerZ)>range/2)continue;
+  c.fillStyle=o.type==='wood'?'#a7d18d':o.type==='stone'?'#c4c6c3':'#d8566b';c.fillRect(px(x)-1,pz(z)-1,2.5,2.5);
+ }
  c.fillStyle='#e0b57b';for(const b of buildings)c.fillRect(px(b.x)-2,pz(b.z)-2,4,4);
- const cx=px(player.pos.x),cy=pz(player.pos.z);c.save();c.translate(cx,cy);c.rotate(-yaw);c.fillStyle='#fff6ab';c.strokeStyle='#111';c.lineWidth=1.3;c.beginPath();c.moveTo(0,-8);c.lineTo(-5,6);c.lineTo(5,6);c.closePath();c.fill();c.stroke();c.restore();
+ c.save();c.translate(w/2,h/2);c.rotate(-yaw);c.fillStyle='#fff6ab';c.strokeStyle='#111';c.lineWidth=1.3;
+ c.beginPath();c.moveTo(0,-8);c.lineTo(-5,6);c.lineTo(5,6);c.closePath();c.fill();c.stroke();c.restore();
  document.querySelector('#coords').textContent=`X ${player.pos.x.toFixed(1)} · Y ${(player.pos.y-1.7).toFixed(1)} · Z ${player.pos.z.toFixed(1)}`;
 }
 let last=performance.now();
