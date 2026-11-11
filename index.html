@@ -729,7 +729,7 @@ function resolveCollision(candidate){
   for(const b of buildings){
    if(b.type!=='raisedFoundation')continue;
    const deck=deckY(b),feet=player.pos.y-1.7,head=player.pos.y;
-   if(feet>=deck+.18||head<=deck-.15)continue;
+   if(feet>=deckSurface(b)-.06||head<=deck-.15)continue;
    const c=Math.cos(b.rotation),sn=Math.sin(b.rotation);
    const dx=candidate.x-b.x,dz=candidate.z-b.z;
    const lx=dx*c+dz*sn,lz=-dx*sn+dz*c;
@@ -777,7 +777,7 @@ function foundationSurface(x,z){
   const dx=x-b.x,dz=z-b.z,c=Math.cos(b.rotation),sn=Math.sin(b.rotation);
   const lx=dx*c+dz*sn,lz=-dx*sn+dz*c;
   if(Math.abs(lx)<=1.47&&Math.abs(lz)<=1.47){
-   const deck=deckY(b)+.29;
+   const deck=deckSurface(b);
    if(top===null||deck>top)top=deck;
   }
  }
@@ -786,7 +786,7 @@ function foundationSurface(x,z){
 let verticalSpeed=0,grounded=true;
 function jump(){
  if(!grounded||!craftOverlay.hidden||!inventoryOverlay.hidden||!settingsOverlay.hidden)return;
- verticalSpeed=5.6;grounded=false;
+ verticalSpeed=7.1;grounded=false;
 }
 const jumpButton=document.querySelector('#touchJump');
 // Touch controls must work independently: the joystick already owns another pointer.
@@ -905,6 +905,7 @@ const previewBad=new THREE.MeshBasicMaterial({color:0xee5544,transparent:true,op
 const FOUNDATION_TYPES=['foundation','raisedFoundation'];
 const FLOOR_OFFSET={foundation:0,raisedFoundation:1.2};
 function deckY(b){return b.mesh.position.y+(FLOOR_OFFSET[b.type]||0);}
+function deckSurface(b){return deckY(b)+(b.type==='raisedFoundation'?.12:.29);}
 function terrainTop(x,z,r){
  return Math.max(terrainHeight(x,z),...[[-1.4,-1.4],[-1.4,1.4],[1.4,-1.4],[1.4,1.4]].map(([dx,dz])=>{const p=rotateXZ(dx,dz,r);return terrainHeight(x+p.x,z+p.z);}))+.05;
 }
@@ -1009,7 +1010,7 @@ function cellKey(x,z){return `${Math.round(x/GRID)},${Math.round(z/GRID)}`;}
 function edgeKey(x,z,rotation){return `${Math.round(x/1.5)},${Math.round(z/1.5)},${Math.round(Math.cos(rotation))===0?'x':'z'}`;}
 function updatePlacement(){
  if(!placement)return;
- const p=placement,f=forward(),rawX=player.pos.x+f.x*3.6,rawZ=player.pos.z+f.z*3.6;
+ const p=placement,f=forward(),rawX=player.pos.x+f.x*2.6,rawZ=player.pos.z+f.z*2.6;
  let x=rawX,z=rawZ,rotation=p.rotation;
  const foundations=buildings.filter(b=>['foundation','raisedFoundation'].includes(b.type));
  let support=null, groupId=null;
@@ -1038,7 +1039,7 @@ function updatePlacement(){
     }
    }
    candidates.sort((a,b)=>distXZ(a,{x:rawX,z:rawZ})-distXZ(b,{x:rawX,z:rawZ}));
-   if(candidates.length&&distXZ(candidates[0],{x:rawX,z:rawZ})<3.5){
+   if(candidates.length&&distXZ(candidates[0],{x:rawX,z:rawZ})<4.5){
     const c=candidates[0];x=c.x;z=c.z;rotation=c.rotation;support=c.base;groupId=c.base.groupId;
    }
   }
@@ -1276,8 +1277,8 @@ function animate(now){
   const currentFeet=player.pos.y-1.7;
   verticalSpeed-=15*dt;player.pos.y+=verticalSpeed*dt;
   const nextFeet=player.pos.y-1.7;
-  const landingOnDeck=surface!==null&&verticalSpeed<=0&&currentFeet>=surface-.08&&nextFeet<=surface;
-  const floor=landingOnDeck?Math.max(terrain,surface):terrain;
+  const landingOnDeck=surface!==null&&verticalSpeed<=0&&currentFeet>=surface-.15&&nextFeet<=surface;
+  const floor=landingOnDeck||surface!==null&&grounded&&Math.abs(currentFeet-surface)<.15?Math.max(terrain,surface):terrain;
   if(player.pos.y<=floor+1.7){player.pos.y=floor+1.7;verticalSpeed=0;grounded=true;}
   else grounded=false;
   player.hunger=Math.max(0,player.hunger-dt*.045);player.thirst=Math.max(0,player.thirst-dt*.07);
