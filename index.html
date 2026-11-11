@@ -96,7 +96,7 @@ button:hover{background:#416445}button:disabled{opacity:.35;cursor:not-allowed}
 <body class="in-main-menu">
 <div id="game"></div>
 <div id="start"><div class="card panel">
-<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.6.1</div>
+<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.6.2</div>
 <p>Erkunde eine unebene Waldlandschaft, sammle Rohstoffe, stelle eine Axt her und bearbeite Bäume und Felsen. Dies bleibt vorerst ein lokaler Einzelspieler-Prototyp.</p>
 <p><b>WASD</b> bewegen · <b>Maus</b> umsehen · <b>E</b> sammeln · <b>Shift</b> sprinten · <b>I</b> Inventar · <b>C</b> Crafting · <b>1–4</b> Schnellauswahl · <b>R</b> drehen · <b>E</b> platzieren · <b>Esc</b> Maus lösen</p>
 <button id="play" type="button" disabled>SPIEL LADEN …</button><p id="menuStatus" class="small" role="status">Spielwelt wird vorbereitet …</p>
@@ -580,6 +580,24 @@ function nearFoundation(x,z){return buildings.filter(b=>['foundation','raisedFou
 
 const previewGood=new THREE.MeshBasicMaterial({color:0x58d67d,transparent:true,opacity:.43,depthWrite:false,side:THREE.DoubleSide});
 const previewBad=new THREE.MeshBasicMaterial({color:0xee5544,transparent:true,opacity:.5,depthWrite:false,side:THREE.DoubleSide});
+const FOUNDATION_TYPES=['foundation','raisedFoundation'];
+const FLOOR_OFFSET={foundation:0,raisedFoundation:1.2};
+function deckY(b){return b.mesh.position.y+(FLOOR_OFFSET[b.type]||0);}
+function terrainTop(x,z,r){
+ return Math.max(terrainHeight(x,z),...[[-1.4,-1.4],[-1.4,1.4],[1.4,-1.4],[1.4,1.4]].map(([dx,dz])=>{const p=rotateXZ(dx,dz,r);return terrainHeight(x+p.x,z+p.z);}))+.05;
+}
+function setSupportPosts(mesh,type,x,z,r,ghost=false){
+ if(!FOUNDATION_TYPES.includes(type))return;
+ if(mesh.userData.posts){const old=mesh.userData.posts;mesh.remove(old);old.traverse(o=>{if(o.geometry)o.geometry.dispose();});}
+ const group=new THREE.Group(),deck=deckY({mesh,type});
+ for(const dx of [-1.28,1.28])for(const dz of [-1.28,1.28]){
+  const p=rotateXZ(dx,dz,r),ground=terrainHeight(x+p.x,z+p.z),top=deck+.07,bottom=ground-.12;
+  if(top-bottom<.15)continue;
+  const post=new THREE.Mesh(new THREE.BoxGeometry(.23,top-bottom,.23),ghost?previewGood:mats.wood);
+  post.position.set(dx,(top+bottom)/2-mesh.position.y,dz);post.castShadow=!ghost;post.receiveShadow=!ghost;group.add(post);
+ }
+ mesh.add(group);mesh.userData.posts=group;
+}
 function makeBuilding(type,x,z,rotation=0,ghost=false){
  const g=new THREE.Group();g.position.set(x,terrainHeight(x,z),z);g.rotation.y=rotation;
  const material=ghost?previewGood:mats.wood;
@@ -592,9 +610,6 @@ function makeBuilding(type,x,z,rotation=0,ghost=false){
   for(let i=-1;i<=1;i++){const plank=new THREE.Mesh(new THREE.BoxGeometry(.07,.025,2.94),material);plank.position.set(i*.9,.30,0);g.add(plank);}
  }else if(type==='raisedFoundation'){
   const deck=new THREE.Mesh(new THREE.BoxGeometry(3,.22,3),material);deck.position.y=1.2;g.add(deck);
-  for(const xx of [-1.28,1.28])for(const zz of [-1.28,1.28]){
-   const post=new THREE.Mesh(new THREE.BoxGeometry(.24,1.2,.24),material);post.position.set(xx,.6,zz);g.add(post);
-  }
   for(let i=-1;i<=1;i++){const plank=new THREE.Mesh(new THREE.BoxGeometry(.07,.025,2.94),material);plank.position.set(i*.9,1.34,0);g.add(plank);}
  }else if(type==='slopedRoof'){
   const slope=Math.atan2(.9,3.2);
@@ -635,14 +650,14 @@ function makeBuilding(type,x,z,rotation=0,ghost=false){
  if(!ghost){g.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});}
  scene.add(g);return g;
 }
-function addBuilding(type,x,z,rotation=0,open=false,groupId=null){
+function addBuilding(type,x,z,rotation=0,open=false,groupId=null,elevation=null){
  if(type==='fire'){addCampfire(x,z);return;}
  const mesh=makeBuilding(type,x,z,rotation);
- if(['wall','door','window','stairs','roof','slopedRoof'].includes(type)){
-  const base=buildings.filter(b=>b.type==='raisedFoundation'&&(groupId===null||b.groupId===groupId)).sort((a,b)=>distXZ(a,{x,z})-distXZ(b,{x,z}))[0];
-  if(base&&distXZ(base,{x,z})<2.6)mesh.position.y+=1.2;
- }
- const b={type,x,z,rotation,mesh,open:!!open,groupId:groupId??nextBuildingGroup++};if(type==='door')mesh.userData.doorHinge.rotation.y=b.open?Math.PI/2:0;buildings.push(b);
+ const near=buildings.filter(b=>FOUNDATION_TYPES.includes(b.type)&&(groupId===null||b.groupId===groupId)).sort((a,b)=>distXZ(a,{x,z})-distXZ(b,{x,z}))[0];
+ const inherited=near&&distXZ(near,{x,z})<3.6?deckY(near):null;
+ const deck=Number.isFinite(elevation)?elevation:(inherited??(FOUNDATION_TYPES.includes(type)?terrainTop(x,z,rotation)+(FLOOR_OFFSET[type]||0):terrainHeight(x,z)));
+ mesh.position.y=deck-(FLOOR_OFFSET[type]||0);setSupportPosts(mesh,type,x,z,rotation);
+ const b={type,x,z,rotation,mesh,elevation:deck,open:!!open,groupId:groupId??nextBuildingGroup++};if(type==='door')mesh.userData.doorHinge.rotation.y=b.open?Math.PI/2:0;buildings.push(b);
 }
 function startPlacement(type){
  if(placement)cancelPlacement();
@@ -699,7 +714,9 @@ function updatePlacement(){
   }
  }
  p.groupId=groupId;
- p.mesh.position.set(x,terrainHeight(x,z)+(support?.type==='raisedFoundation'?1.2:0),z);p.mesh.rotation.y=rotation;
+ p.elevation=support?deckY(support):(FOUNDATION_TYPES.includes(p.type)?terrainTop(x,z,rotation)+(FLOOR_OFFSET[p.type]||0):terrainHeight(x,z));
+ p.mesh.position.set(x,p.elevation-(FLOOR_OFFSET[p.type]||0),z);p.mesh.rotation.y=rotation;
+ setSupportPosts(p.mesh,p.type,x,z,rotation,true);
  p.rotation=rotation;
  const radius=p.type==='fire'?1:1.4;
  let valid=Math.abs(x)<104&&Math.abs(z)<104&&!inRiver(x,z,radius);
@@ -721,9 +738,9 @@ function updatePlacement(){
  }
  // Auf stark geneigtem Terrain nicht bauen; Fundamente koennen sonst schweben.
  if(['wall','door','window','stairs'].includes(p.type)&&Math.hypot(x-player.pos.x,z-player.pos.z)<1.15)valid=false;
- if(['foundation','raisedFoundation'].includes(p.type)&&Math.abs(terrainHeight(x+1.5,z)-terrainHeight(x-1.5,z))>1.35)valid=false;
+
  if(['wall','door','window','stairs'].includes(p.type)&&Math.hypot(x-player.pos.x,z-player.pos.z)<1.15)valid=false;
- if(['foundation','raisedFoundation'].includes(p.type)&&Math.abs(terrainHeight(x,z+1.5)-terrainHeight(x,z-1.5))>1.35)valid=false;
+
  p.valid=valid;
  p.mesh.traverse(o=>{if(o.isMesh)o.material=valid?previewGood:previewBad;});
  document.querySelector('#buildInfo').textContent=`${recipes[p.type].title}: ${valid?(support?'✓ Eingerastet':snapEnabled?'✓ Neues Gebäude / freier Platz':'✓ Freies Platzieren'):'✕ Kein gültiger Bauplatz'}`;
@@ -735,7 +752,7 @@ function confirmPlacement(){
  const needs=recipes[type].needs;
  if(Object.entries(needs).some(([k,n])=>inventory[k]<n)){toast('Material fehlt.');cancelPlacement();return;}
  for(const [k,n] of Object.entries(needs))inventory[k]-=n;
- addBuilding(type,x,z,rotation,false,p.groupId);updateInv();saveGame(true);
+ addBuilding(type,x,z,rotation,false,p.groupId,p.elevation);updateInv();saveGame(true);
  if(Object.entries(needs).some(([k,n])=>inventory[k]<n)){cancelPlacement();toast(`${recipes[type].title} gebaut · Material für weitere fehlt.`);return;}
  updateBuildPalette();updatePlacement();toast(`${recipes[type].title} gebaut · weitere Platzierung aktiv.`);
 }
@@ -786,7 +803,7 @@ document.querySelector('#drinkNearby').addEventListener('click',()=>{
 function saveGame(silent=false){
  try{
   const state={version:4,pos:[player.pos.x,player.pos.z],yaw,pitch,health:player.health,hunger:player.hunger,thirst:player.thirst,inventory:{...inventory},axeEquipped,elapsed,
-   objects:objects.map(o=>({active:o.active!==false,hp:o.hp,respawnAt:o.respawnAt||0})),campfires:campfires.map(({x,z})=>({x,z})),buildings:buildings.map(({type,x,z,rotation,open,groupId})=>({type,x,z,rotation,open:!!open,groupId})),activeTool};
+   objects:objects.map(o=>({active:o.active!==false,hp:o.hp,respawnAt:o.respawnAt||0})),campfires:campfires.map(({x,z})=>({x,z})),buildings:buildings.map(({type,x,z,rotation,open,groupId,elevation})=>({type,x,z,rotation,open:!!open,groupId,elevation})),activeTool};
   localStorage.setItem(SAVE_KEY,JSON.stringify(state));
   document.querySelector('#saveStatus').textContent='Gespeichert · '+new Date().toLocaleTimeString('de-CH',{hour:'2-digit',minute:'2-digit'});
   if(!silent)toast('Spielstand lokal gespeichert. Lade die Seite neu, um das Laden zu prüfen.');
@@ -810,7 +827,7 @@ function loadGame(){
    o.mesh.visible=o.active;
   });}
   if(Array.isArray(state.campfires))for(const fire of state.campfires.slice(0,100))if(Number.isFinite(fire.x)&&Number.isFinite(fire.z))addCampfire(fire.x,fire.z);
-  if(Array.isArray(state.buildings))for(const b of state.buildings.slice(0,150))if(['foundation','raisedFoundation','wall','door','window','stairs','roof','slopedRoof'].includes(b.type)&&Number.isFinite(b.x)&&Number.isFinite(b.z))addBuilding(b.type,b.x,b.z,Number.isFinite(b.rotation)?b.rotation:0,!!b.open,Number.isInteger(b.groupId)?b.groupId:null);
+  if(Array.isArray(state.buildings))for(const b of state.buildings.slice(0,150))if(['foundation','raisedFoundation','wall','door','window','stairs','roof','slopedRoof'].includes(b.type)&&Number.isFinite(b.x)&&Number.isFinite(b.z))addBuilding(b.type,b.x,b.z,Number.isFinite(b.rotation)?b.rotation:0,!!b.open,Number.isInteger(b.groupId)?b.groupId:null,Number.isFinite(b.elevation)?b.elevation:null);
   resolveCollision(player.pos);player.pos.y=terrainHeight(player.pos.x,player.pos.z)+1.7;
   document.querySelector('#equipAxe').textContent=axeEquipped?'Axt ablegen':'Axt ausrüsten';
   updateInv();document.querySelector('#saveStatus').textContent='Spielstand geladen · automatische Sicherung aktiv';
