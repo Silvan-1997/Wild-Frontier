@@ -685,7 +685,17 @@ function jump(){
  if(!grounded||!craftOverlay.hidden||!inventoryOverlay.hidden||!settingsOverlay.hidden)return;
  verticalSpeed=5.6;grounded=false;
 }
-document.querySelector('#touchJump').addEventListener('click',jump);
+const jumpButton=document.querySelector('#touchJump');
+// Touch controls must work independently: the joystick already owns another pointer.
+jumpButton.addEventListener('pointerdown',e=>{
+ if(e.target.closest('.grip'))return;
+ e.preventDefault();
+ jump();
+});
+jumpButton.addEventListener('click',e=>{
+ // Keep desktop accessibility, but do not rely on click for multi-touch.
+ if(e.detail===0)jump();
+});
 document.addEventListener('keydown',e=>{if(e.code==='Space'&&!e.repeat&&document.body.classList.contains('in-main-menu')===false){e.preventDefault();jump();}});
 function movePlayer(move,distance){
  // Begrenzte Teilschritte verhindern, dass schnelle Bewegung Hindernisse ueberspringt.
