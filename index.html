@@ -113,7 +113,7 @@ button:hover{background:#416445}button:disabled{opacity:.35;cursor:not-allowed}
 <body class="in-main-menu">
 <div id="game"></div>
 <div id="start"><div class="card panel">
-<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.8.15</div>
+<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.8.16</div>
 <p>Erkunde eine unebene Waldlandschaft, sammle Rohstoffe, stelle eine Axt her und bearbeite Bäume und Felsen. Deine private Survival-Welt wird mit deinem Konto online gespeichert.</p>
 <p><b>WASD</b> bewegen · <b>Maus</b> umsehen · <b>E</b> sammeln · <b>Shift</b> sprinten · <b>I</b> Inventar · <b>C</b> Crafting · <b>1–4</b> Schnellauswahl · <b>R</b> drehen · <b>E</b> platzieren · <b>Esc</b> Maus lösen</p>
 <section id="cloudLogin" style="margin:14px auto;padding:12px;border:1px solid #658c6d;border-radius:10px;max-width:400px;background:#10231b">
@@ -728,7 +728,11 @@ function resolveCollision(candidate){
   // Raised foundations: solid horizontal footprint below the platform.
   // Keep the player on the outside of the 3x3 m footprint while below its deck.
   for(const b of buildings){
-   if(b.type!=='raisedFoundation')continue;
+   if(!FOUNDATION_TYPES.includes(b.type))continue;
+   // A normal foundation can also be elevated when snapped to a raised deck.
+   // Detect actual deck clearance rather than relying on the building type.
+   const ground=terrainHeight(b.x,b.z);
+   if(deckSurface(b)-ground<.48)continue;
    const feet=player.pos.y-1.7;
    if(feet>=deckSurface(b)-.10)continue;
    const c=Math.cos(b.rotation),sn=Math.sin(b.rotation);
