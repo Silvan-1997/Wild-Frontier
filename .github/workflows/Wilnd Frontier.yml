@@ -1,0 +1,42 @@
+
+name: WILD FRONTIER – Codeprüfung
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-game:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repository laden
+        uses: actions/checkout@v4
+
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: JavaScript prüfen
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          html = Path("index.html").read_text()
+          scripts = re.findall(
+              r'<script\b[^>]*>(.*?)</script>',
+              html, re.S | re.I
+          )
+          if not scripts:
+              raise SystemExit("Keine Skripte gefunden")
+          for i, script in enumerate(scripts):
+              Path(f"/tmp/wf-script-{i}.mjs").write_text(script)
+          PY
+          for file in /tmp/wf-script-*.mjs; do
+            node --check "$file"
+          done
