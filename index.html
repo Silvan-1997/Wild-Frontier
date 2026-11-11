@@ -338,6 +338,31 @@ const chunkTrunkGeo=new THREE.CylinderGeometry(.18,.30,2.4,5);
 const chunkCrownGeo=new THREE.ConeGeometry(1.25,3.4,6);
 const chunkRockGeo=new THREE.DodecahedronGeometry(.8,0);
 const chunkDummy=new THREE.Object3D();
+const WORLD_LANDMARKS=[
+ {id:'old-ruin',type:'ruin',name:'Verlassene Steinruine',x:256,z:128,radius:19}
+];
+const ruinStone=new THREE.MeshStandardMaterial({color:0x777b70,roughness:1});
+const ruinDark=new THREE.MeshStandardMaterial({color:0x4a5148,roughness:1});
+function createLandmark(group,landmark,ox,oz){
+ const root=new THREE.Group();
+ root.position.set(landmark.x-ox,terrainHeight(landmark.x,landmark.z),landmark.z-oz);
+ function block(x,z,w,d,h,material=ruinStone){
+  const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),material);
+  m.position.set(x,h/2,z);m.castShadow=true;m.receiveShadow=true;root.add(m);
+ }
+ // Broken courtyard, fragmented walls and a walkable entrance.
+ block(0,-7,13,1.1,2.5);block(-7,0,1.1,14,3.2);block(7,-3.7,1.1,6,2.8);
+ block(7,5.2,1.1,3.4,1.6);block(-4.5,7,5,1.1,2.6);
+ block(4.4,7,4.6,1.1,3.8);block(-5.5,-5.5,2,2,4.2,ruinDark);
+ block(5.5,-5.5,2,2,3.6,ruinDark);
+ block(-2,0,1.6,1.8,.65,ruinDark);block(3,2,2.3,1.5,.9,ruinDark);
+ const pillarGeo=new THREE.CylinderGeometry(.5,.7,3.2,6);
+ for(const [x,z] of [[-4,-4],[4,-4],[-4,4]]){
+  const pillar=new THREE.Mesh(pillarGeo,ruinStone);pillar.position.set(x,1.6,z);pillar.castShadow=true;root.add(pillar);
+ }
+ group.add(root);
+}
+
 function chunkRandom(cx,cz){
  let state=(Math.imul(cx,73856093)^Math.imul(cz,19349663)^0x5f3759df)>>>0;
  return ()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return state/4294967296;};
@@ -349,6 +374,7 @@ function createChunkVegetation(cx,cz,group){
   const x=ox+(rand()-.5)*CHUNK_SIZE,z=oz+(rand()-.5)*CHUNK_SIZE;
   const distance=Math.max(Math.abs(x),Math.abs(z));
   if(distance<114)continue; // original resource and save indexes must not change
+  if(WORLD_LANDMARKS.some(p=>Math.hypot(x-p.x,z-p.z)<p.radius))continue;
   const h=terrainHeight(x,z);
   if(rand()<.72)trees.push({x,z,h,scale:.65+rand()*.75,rot:rand()*Math.PI*2});
   else rocks.push({x,z,h,scale:.45+rand()*1.3,rot:rand()*Math.PI*2});
@@ -389,6 +415,9 @@ function makeTerrainChunk(cx,cz){
  const mesh=new THREE.Mesh(geometry,mats.grass);
  mesh.receiveShadow=true;mesh.frustumCulled=true;group.add(mesh);
  createChunkVegetation(cx,cz,group);
+ for(const landmark of WORLD_LANDMARKS){
+  if(Math.floor((landmark.x+CHUNK_SIZE/2)/CHUNK_SIZE)===cx&&Math.floor((landmark.z+CHUNK_SIZE/2)/CHUNK_SIZE)===cz)createLandmark(group,landmark,ox,oz);
+ }
  scene.add(group);terrainChunks.set(chunkKey(cx,cz),{group,geometry});
 }
 function streamTerrain(x,z){
@@ -1145,6 +1174,7 @@ function drawMinimap(now){
   c.fillStyle=o.type==='wood'?'#a7d18d':o.type==='stone'?'#c4c6c3':'#d8566b';c.fillRect(px(x)-1,pz(z)-1,2.5,2.5);
  }
  c.fillStyle='#e0b57b';for(const b of buildings)c.fillRect(px(b.x)-2,pz(b.z)-2,4,4);
+ for(const p of WORLD_LANDMARKS){if(Math.abs(p.x-centerX)<range/2&&Math.abs(p.z-centerZ)<range/2){c.fillStyle='#e7c86c';c.fillRect(px(p.x)-3,pz(p.z)-3,6,6);}}
  c.save();c.translate(w/2,h/2);c.rotate(-yaw);c.fillStyle='#fff6ab';c.strokeStyle='#111';c.lineWidth=1.3;
  c.beginPath();c.moveTo(0,-8);c.lineTo(-5,6);c.lineTo(5,6);c.closePath();c.fill();c.stroke();c.restore();
  document.querySelector('#coords').textContent=`X ${player.pos.x.toFixed(1)} · Y ${(player.pos.y-1.7).toFixed(1)} · Z ${player.pos.z.toFixed(1)}`;
