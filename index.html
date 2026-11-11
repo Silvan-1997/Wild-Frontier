@@ -113,7 +113,7 @@ button:hover{background:#416445}button:disabled{opacity:.35;cursor:not-allowed}
 <body class="in-main-menu">
 <div id="game"></div>
 <div id="start"><div class="card panel">
-<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.8.17</div>
+<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.8.18</div>
 <p>Erkunde eine unebene Waldlandschaft, sammle Rohstoffe, stelle eine Axt her und bearbeite Bäume und Felsen. Deine private Survival-Welt wird mit deinem Konto online gespeichert.</p>
 <p><b>WASD</b> bewegen · <b>Maus</b> umsehen · <b>E</b> sammeln · <b>Shift</b> sprinten · <b>I</b> Inventar · <b>C</b> Crafting · <b>1–4</b> Schnellauswahl · <b>R</b> drehen · <b>E</b> platzieren · <b>Esc</b> Maus lösen</p>
 <section id="cloudLogin" style="margin:14px auto;padding:12px;border:1px solid #658c6d;border-radius:10px;max-width:400px;background:#10231b">
@@ -736,7 +736,7 @@ function resolveCollision(candidate){
    if(deckSurface(b)-ground<.48)continue;
    const feet=player.pos.y-1.7;
    // Small ledges can be stepped onto while grounded; tall ones remain solid.
-   if(feet>=deckSurface(b)-.10||grounded&&deckSurface(b)-feet<=STEP_HEIGHT)continue;
+   if(feet>=deckSurface(b)-.10)continue;
    const c=Math.cos(b.rotation),sn=Math.sin(b.rotation);
    const dx=candidate.x-b.x,dz=candidate.z-b.z;
    let lx=dx*c+dz*sn,lz=-dx*sn+dz*c;
@@ -807,11 +807,33 @@ jumpButton.addEventListener('click',e=>{
  if(e.detail===0)jump();
 });
 document.addEventListener('keydown',e=>{if(e.code==='Space'&&!e.repeat&&document.body.classList.contains('in-main-menu')===false){e.preventDefault();jump();}});
+function autoHopAtLowFoundation(nextX,nextZ){
+ if(!grounded||verticalSpeed>0)return;
+ const feet=player.pos.y-1.7;
+ for(const b of buildings){
+  if(!FOUNDATION_TYPES.includes(b.type))continue;
+  const rise=deckSurface(b)-feet;
+  if(rise<=.08||rise>STEP_HEIGHT)continue;
+  const c=Math.cos(b.rotation),sn=Math.sin(b.rotation);
+  const dx=nextX-b.x,dz=nextZ-b.z;
+  const lx=dx*c+dz*sn,lz=-dx*sn+dz*c;
+  // Only hop when approaching the platform footprint, not while walking nearby.
+  if(Math.abs(lx)>1.5+.38||Math.abs(lz)>1.5+.38)continue;
+  const oldDx=player.pos.x-b.x,oldDz=player.pos.z-b.z;
+  const oldX=oldDx*c+oldDz*sn,oldZ=-oldDx*sn+oldDz*c;
+  if(Math.abs(oldX)<1.45&&Math.abs(oldZ)<1.45)continue;
+  verticalSpeed=Math.sqrt(2*15*(rise+.16));
+  grounded=false;
+  return;
+ }
+}
 function movePlayer(move,distance){
  // Begrenzte Teilschritte verhindern, dass schnelle Bewegung Hindernisse ueberspringt.
  const count=Math.max(1,Math.ceil(distance/.16)),step=distance/count;
  for(let i=0;i<count;i++){
-  const candidate=resolveCollision(player.pos.clone().addScaledVector(move,step));
+  const intended=player.pos.clone().addScaledVector(move,step);
+  autoHopAtLowFoundation(intended.x,intended.z);
+  const candidate=resolveCollision(intended);
   player.pos.x=candidate.x;player.pos.z=candidate.z;
  }
 }
@@ -1284,9 +1306,8 @@ function animate(now){
   const currentFeet=player.pos.y-1.7;
   verticalSpeed-=15*dt;player.pos.y+=verticalSpeed*dt;
   const nextFeet=player.pos.y-1.7;
-  const stepOntoDeck=surface!==null&&grounded&&verticalSpeed<=0&&surface-currentFeet>=0&&surface-currentFeet<=.48;
   const landingOnDeck=surface!==null&&verticalSpeed<=0&&currentFeet>=surface-.15&&nextFeet<=surface;
-  const floor=stepOntoDeck||landingOnDeck||surface!==null&&grounded&&Math.abs(currentFeet-surface)<.15?Math.max(terrain,surface):terrain;
+  const floor=landingOnDeck||surface!==null&&grounded&&Math.abs(currentFeet-surface)<.15?Math.max(terrain,surface):terrain;
   if(player.pos.y<=floor+1.7){player.pos.y=floor+1.7;verticalSpeed=0;grounded=true;}
   else grounded=false;
   player.hunger=Math.max(0,player.hunger-dt*.045);player.thirst=Math.max(0,player.thirst-dt*.07);
