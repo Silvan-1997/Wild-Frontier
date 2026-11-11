@@ -132,7 +132,7 @@ button:hover{background:#416445}button:disabled{opacity:.35;cursor:not-allowed}
   <div class="stat"><div class="stathead"><span>Durst</span><b id="thirstText">100</b></div><div class="bar"><div class="fill" id="thirstBar" style="background:#62b8df"></div></div></div>
   <div class="small" id="weather">Klar · Tag 1 · 08:00</div><div class="small" id="saveStatus">Noch nicht gespeichert</div>
 </div>
-<div id="minimapPanel" class="panel" aria-label="Minikarte"><div id="mapHeader"><span>🧭 KARTE</span><button id="setHome" type="button" title="Aktuelle Position als Zuhause speichern" aria-label="Hier Zuhause setzen" style="font-size:12px;padding:5px 7px;margin-left:auto;background:#365c3a">⌂ Setzen</button><button id="settingsButton" type="button" aria-label="Spielmenü öffnen" title="Spielmenü">⚙️</button></div><canvas id="minimap" width="240" height="240" aria-label="Minikarte der Spielwelt"></canvas><div id="coords">X 0 · Y 0 · Z 0</div></div>
+<div id="minimapPanel" class="panel" aria-label="Minikarte"><div id="mapHeader"><span>🧭 KARTE</span><button id="settingsButton" type="button" aria-label="Spielmenü öffnen" title="Spielmenü">⚙️</button></div><canvas id="minimap" width="240" height="240" aria-label="Minikarte der Spielwelt"></canvas><div id="coords">X 0 · Y 0 · Z 0</div></div>
 <div id="settingsOverlay" hidden><section id="settingsPanel" class="panel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle"><div class="craftHeader"><h3 id="settingsTitle">⚙️ Spielmenü</h3><button id="settingsClose" type="button" aria-label="Spielmenü schliessen">✕</button></div><p class="small">Dein Spielstand wird zusätzlich automatisch alle 20 Sekunden gespeichert.</p><button id="settingsSave" type="button">💾 Spielstand jetzt speichern</button><div id="settingsSaveStatus" role="status">Noch nicht manuell gespeichert</div><hr><div class="small" style="font-weight:700;margin:8px 0">🎮 Grafikqualität</div>
 <label for="graphicsQuality" class="small">Qualitätsstufe</label>
 <select id="graphicsQuality" style="width:100%;padding:12px;border-radius:9px;background:#21372a;color:white;border:1px solid #66816b">
@@ -204,7 +204,7 @@ button:hover{background:#416445}button:disabled{opacity:.35;cursor:not-allowed}
  <div class="buildMenuHeader"><strong>🏗️ Bauteile</strong><button id="buildMenuClose" type="button">✕</button></div>
  <div class="menuFilters" id="buildCategories"></div><div id="buildItems" class="buildItems"></div>
 </div>
-<div id="buildQuick" hidden><button id="buildRotate" type="button" aria-label="Bauteil drehen">↻ Drehen</button><button id="buildSnap" type="button" aria-pressed="true">🧲 Einrasten: AN</button><button id="buildCancel" type="button" aria-label="Bauen beenden">✕</button></div>
+<div id="dreamOverlay" hidden style="position:fixed;inset:0;background:#000b;z-index:90;align-items:center;justify-content:center"><section class="panel" style="width:min(90vw,380px);max-height:80vh;overflow:auto;padding:18px"><h3>💤 Wohin möchtest du träumen?</h3><div id="dreamDestinations" style="display:grid;gap:8px"></div><button id="dreamClose" type="button">Schliessen</button></section></div><style>#dreamOverlay:not([hidden]){display:flex}</style><div id="buildQuick" hidden><button id="buildRotate" type="button" aria-label="Bauteil drehen">↻ Drehen</button><button id="buildSnap" type="button" aria-pressed="true">🧲 Einrasten: AN</button><button id="buildCancel" type="button" aria-label="Bauen beenden">✕</button></div>
 <div id="buildInfo" hidden role="status">Bauvorschau</div>
 <div id="touchUI">
   <div id="stickBase"><div id="stickKnob"></div></div>
@@ -484,11 +484,11 @@ const river=new THREE.Mesh(riverGeo,riverMat);scene.add(river);
 
 const keys={};let yaw=0,pitch=0,locked=false;
 const player={pos:new THREE.Vector3(0,1.7,8),speed:6,health:100,hunger:100,thirst:100};
-let homePosition={x:0,z:8};
+let homePosition={x:0,z:8},homeBedId=null,nextBedId=1;
 
 const inventory={wood:0,stone:0,berries:0,axe:0,hammer:0};
 const campfires=[],buildings=[];let savePending=false;
-const recipes={axe:{title:'Steinaxt',desc:'Ein einfaches Werkzeug. Mit der Steinaxt kannst du Bäume schneller bearbeiten.',needs:{wood:3,stone:2}},hammer:{title:'Bauhammer',desc:'Damit kannst du gezielt selbst gebaute Objekte abreissen. Beim Abreissen gibt es 50 % Material zurück.',needs:{wood:3,stone:2}},fire:{title:'Lagerfeuer',desc:'Platzierungsvorschau vor dir, erst bei Bestätigung werden Rohstoffe verbraucht.',needs:{wood:5,stone:3}},foundation:{title:'Holzfundament',desc:'Erstes Bauteil für deine Hütte. Wird am Boden platziert.',needs:{wood:8,stone:2}},raisedFoundation:{title:'Erhöhtes Holzfundament',desc:'Holzplattform auf Stützen, 1,2 m hoch.',needs:{wood:12,stone:4}},wall:{title:'Holzwand',desc:'Rastet an der freien Kante eines Fundaments ein.',needs:{wood:6}},door:{title:'Türrahmen',desc:'Türöffnung an einer Fundamentkante, statt einer Wand.',needs:{wood:5}},roof:{title:'Holzdach',desc:'Rastet über einem Fundament ein.',needs:{wood:9}},slopedRoof:{title:'Schrägdach',desc:'Geneigtes Pultdach über einem Fundament.',needs:{wood:11}},window:{title:'Fensterwand',desc:'Wand mit Fensteröffnung, rastet an Fundamentkanten ein.',needs:{wood:7}},stairs:{title:'Holztreppe',desc:'Rastet an einer Fundamentkante ein.',needs:{wood:6}}};
+const recipes={axe:{title:'Steinaxt',desc:'Ein einfaches Werkzeug. Mit der Steinaxt kannst du Bäume schneller bearbeiten.',needs:{wood:3,stone:2}},hammer:{title:'Bauhammer',desc:'Damit kannst du gezielt selbst gebaute Objekte abreissen. Beim Abreissen gibt es 50 % Material zurück.',needs:{wood:3,stone:2}},fire:{title:'Lagerfeuer',desc:'Platzierungsvorschau vor dir, erst bei Bestätigung werden Rohstoffe verbraucht.',needs:{wood:5,stone:3}},foundation:{title:'Holzfundament',desc:'Erstes Bauteil für deine Hütte. Wird am Boden platziert.',needs:{wood:8,stone:2}},raisedFoundation:{title:'Erhöhtes Holzfundament',desc:'Holzplattform auf Stützen, 1,2 m hoch.',needs:{wood:12,stone:4}},wall:{title:'Holzwand',desc:'Rastet an der freien Kante eines Fundaments ein.',needs:{wood:6}},door:{title:'Türrahmen',desc:'Türöffnung an einer Fundamentkante, statt einer Wand.',needs:{wood:5}},roof:{title:'Holzdach',desc:'Rastet über einem Fundament ein.',needs:{wood:9}},slopedRoof:{title:'Schrägdach',desc:'Geneigtes Pultdach über einem Fundament.',needs:{wood:11}},window:{title:'Fensterwand',desc:'Wand mit Fensteröffnung, rastet an Fundamentkanten ein.',needs:{wood:7}},stairs:{title:'Holztreppe',desc:'Rastet an einer Fundamentkante ein.',needs:{wood:6}},bed:{title:'Bett',desc:'Zuhause setzen und zu anderen Betten träumen.',needs:{wood:8,stone:2}}};
 let selectedRecipe='axe';
 const labels={wood:'Holz',stone:'Stein',berries:'Beeren',axe:'Steinaxt',hammer:'Bauhammer'};
 let axeEquipped=false;let hammerOwned=false,activeTool='hands',lastBuildType='foundation';
@@ -571,7 +571,7 @@ const RECIPE_CATEGORIES={
  walls:{label:'🧱 Wände',items:['wall','window']},
  roofs:{label:'🏠 Dächer',items:['roof','slopedRoof']},
  access:{label:'🚪 Zugänge',items:['door','stairs']},
- other:{label:'🔥 Sonstiges',items:['fire']}
+ other:{label:'🔥 Sonstiges',items:['fire','bed']}
 };
 const BUILD_CATEGORIES=Object.fromEntries(Object.entries(RECIPE_CATEGORIES).filter(([key])=>key!=='tools'));
 let craftCategory='all',buildCategory='foundations';
@@ -843,10 +843,29 @@ function demolish(){
  const group=target.mesh;
  if(group){scene.remove(group);group.traverse(o=>{if(o.geometry)o.geometry.dispose();});}
  const list=isFire?campfires:buildings;list.splice(list.indexOf(target),1);
+ if(target.type==='bed'&&target.bedId===homeBedId){const next=buildings.find(b=>b.type==='bed');homeBedId=next?.bedId??null;homePosition=next?{x:next.x,z:next.z}:{x:0,z:8};}
  for(const [k,n] of Object.entries(recipes[type].needs))inventory[k]+=Math.floor(n/2);
  updateInv();saveGame(true);toast(`${recipes[type].title} abgerissen · 50 % Material zurück (abgerundet).`);
 }
-function interactWorld(){if(placement){confirmPlacement();return;}if(activeTool==='hammer')demolish();else if(!toggleDoor())collect();}
+function interactWorld(){
+ if(placement){confirmPlacement();return;}
+ if(activeTool==='hammer'){demolish();return;}
+ const target=aimedBuilding(4.5);
+ if(target?.type==='bed'){openDreamMenu(target);return;}
+ if(!toggleDoor())collect();
+}
+function openDreamMenu(bed){
+ const host=document.querySelector('#dreamDestinations');host.replaceChildren();
+ const setHome=document.createElement('button');setHome.textContent='🏠 Dieses Bett als Zuhause setzen';
+ setHome.addEventListener('click',()=>{homeBedId=bed.bedId;homePosition={x:bed.x,z:bed.z};saveGame(true);closeDreamMenu();toast('Zuhause gespeichert.');});host.append(setHome);
+ buildings.filter(b=>b.type==='bed').forEach((dest,i)=>{
+  const btn=document.createElement('button');btn.textContent='💤 '+(dest.bedId===homeBedId?'🏠 ':'')+'Bett '+(i+1)+' · X '+Math.round(dest.x)+' / Z '+Math.round(dest.z);btn.disabled=dest===bed;
+  btn.addEventListener('click',()=>{player.pos.set(dest.x+2,terrainHeight(dest.x+2,dest.z)+1.7,dest.z);verticalSpeed=0;grounded=true;updateTerrainStreaming(player.pos.x,player.pos.z);closeDreamMenu();saveGame(true);toast('💤 Traumreise abgeschlossen.');});host.append(btn);
+ });
+ document.querySelector('#dreamOverlay').hidden=false;
+}
+function closeDreamMenu(){document.querySelector('#dreamOverlay').hidden=true;}
+document.querySelector('#dreamClose').addEventListener('click',closeDreamMenu);
 let placement=null;
 let snapEnabled=true;
 let nextBuildingGroup=1;
@@ -884,6 +903,11 @@ function makeBuilding(type,x,z,rotation=0,ghost=false){
   for(let i=0;i<3;i++){const log=new THREE.Mesh(new THREE.CylinderGeometry(.12,.12,1.4,8),material);log.rotation.z=Math.PI/2;log.rotation.y=i*Math.PI/3;log.position.y=.14;g.add(log);}
   const flame=new THREE.Mesh(new THREE.ConeGeometry(.28,.85,8),ghost?previewGood:mats.fire);flame.position.y=.65;g.add(flame);
   if(!ghost){const light=new THREE.PointLight(0xff8a35,2.5,10);light.position.y=1;g.add(light);}
+ }else if(type==='bed'){
+  const mattress=new THREE.Mesh(new THREE.BoxGeometry(1.35,.28,2.35),ghost?previewGood:new THREE.MeshStandardMaterial({color:0x597a8a}));mattress.position.y=.53;g.add(mattress);
+  const pillow=new THREE.Mesh(new THREE.BoxGeometry(1.1,.14,.5),ghost?previewGood:new THREE.MeshStandardMaterial({color:0xe5dfc7}));pillow.position.set(0,.76,-.68);g.add(pillow);
+  for(const xx of [-.56,.56])for(const zz of [-1.02,1.02]){const leg=new THREE.Mesh(new THREE.BoxGeometry(.15,.52,.15),material);leg.position.set(xx,.26,zz);g.add(leg);}
+  const head=new THREE.Mesh(new THREE.BoxGeometry(1.5,.85,.17),material);head.position.set(0,.63,-1.16);g.add(head);
  }else if(type==='foundation'){
   const base=new THREE.Mesh(new THREE.BoxGeometry(3,.22,3),material);base.position.y=.17;g.add(base);
   for(let i=-1;i<=1;i++){const plank=new THREE.Mesh(new THREE.BoxGeometry(.07,.025,2.94),material);plank.position.set(i*.9,.30,0);g.add(plank);}
@@ -936,7 +960,7 @@ function addBuilding(type,x,z,rotation=0,open=false,groupId=null,elevation=null)
  const inherited=near&&distXZ(near,{x,z})<3.6?deckY(near):null;
  const deck=Number.isFinite(elevation)?elevation:(inherited??(FOUNDATION_TYPES.includes(type)?terrainTop(x,z,rotation)+(FLOOR_OFFSET[type]||0):terrainHeight(x,z)));
  mesh.position.y=deck-(FLOOR_OFFSET[type]||0);setSupportPosts(mesh,type,x,z,rotation);
- const b={type,x,z,rotation,mesh,elevation:deck,open:!!open,groupId:groupId??nextBuildingGroup++};if(type==='door')mesh.userData.doorHinge.rotation.y=b.open?Math.PI/2:0;buildings.push(b);
+ const b={type,x,z,rotation,mesh,elevation:deck,open:!!open,groupId:groupId??nextBuildingGroup++,bedId:type==='bed'?nextBedId++:null};if(type==='door')mesh.userData.doorHinge.rotation.y=b.open?Math.PI/2:0;buildings.push(b);
 }
 function startPlacement(type){
  if(placement)cancelPlacement();
@@ -997,8 +1021,8 @@ function updatePlacement(){
  p.mesh.position.set(x,p.elevation-(FLOOR_OFFSET[p.type]||0),z);p.mesh.rotation.y=rotation;
  setSupportPosts(p.mesh,p.type,x,z,rotation,true);
  p.rotation=rotation;
- const radius=p.type==='fire'?1:1.4;
- let valid=Math.abs(x)<104&&Math.abs(z)<104&&!inRiver(x,z,radius);
+ const radius=p.type==='fire'||p.type==='bed'?1:1.4;
+ let valid=!inRiver(x,z,radius);
  if(['foundation','raisedFoundation'].includes(p.type)){
   valid=valid&&!buildings.some(b=>['foundation','raisedFoundation'].includes(b.type)&&Math.hypot(x-b.x,z-b.z)<2.65);
  }else if(['wall','door','window','stairs','roof','slopedRoof'].includes(p.type)){
@@ -1006,7 +1030,7 @@ function updatePlacement(){
   if(['roof','slopedRoof'].includes(p.type))valid=valid&&!buildings.some(b=>['roof','slopedRoof'].includes(b.type)&&Math.hypot(x-b.x,z-b.z)<.35);
   else valid=valid&&!buildings.some(b=>(p.type==='stairs'?b.type==='stairs':['wall','door','window'].includes(b.type))&&Math.hypot(x-b.x,z-b.z)<.28);
  }
- if(p.type==='fire'||['foundation','raisedFoundation'].includes(p.type)){
+ if(['fire','bed','foundation','raisedFoundation'].includes(p.type)){
   for(const o of objects){if(!valid)break;if(o.active===false||!o.solidRadius)continue;
    if(Math.hypot(x-o.mesh.position.x,z-o.mesh.position.z)<radius+o.solidRadius+.3)valid=false;}
   for(const b of buildings){if(!valid)break;
@@ -1031,7 +1055,9 @@ function confirmPlacement(){
  const needs=recipes[type].needs;
  if(Object.entries(needs).some(([k,n])=>inventory[k]<n)){toast('Material fehlt.');cancelPlacement();return;}
  for(const [k,n] of Object.entries(needs))inventory[k]-=n;
- addBuilding(type,x,z,rotation,false,p.groupId,p.elevation);updateInv();saveGame(true);
+ addBuilding(type,x,z,rotation,false,p.groupId,p.elevation);
+ if(type==='bed'){homePosition={x,z};homeBedId=buildings[buildings.length-1].bedId;}
+ updateInv();saveGame(true);
  if(Object.entries(needs).some(([k,n])=>inventory[k]<n)){cancelPlacement();toast(`${recipes[type].title} gebaut · Material für weitere fehlt.`);return;}
  updateBuildPalette();updatePlacement();toast(`${recipes[type].title} gebaut · weitere Platzierung aktiv.`);
 }
@@ -1081,8 +1107,8 @@ document.querySelector('#drinkNearby').addEventListener('click',()=>{
 });
 function saveGame(silent=false){
  try{
-  const state={version:4,pos:[player.pos.x,player.pos.z],home:{...homePosition},yaw,pitch,health:player.health,hunger:player.hunger,thirst:player.thirst,inventory:{...inventory},axeEquipped,elapsed,
-   objects:objects.map(o=>({active:o.active!==false,hp:o.hp,respawnAt:o.respawnAt||0})),campfires:campfires.map(({x,z})=>({x,z})),buildings:buildings.map(({type,x,z,rotation,open,groupId,elevation})=>({type,x,z,rotation,open:!!open,groupId,elevation})),activeTool};
+  const state={version:4,pos:[player.pos.x,player.pos.z],home:{...homePosition},homeBedId,nextBedId,yaw,pitch,health:player.health,hunger:player.hunger,thirst:player.thirst,inventory:{...inventory},axeEquipped,elapsed,
+   objects:objects.map(o=>({active:o.active!==false,hp:o.hp,respawnAt:o.respawnAt||0})),campfires:campfires.map(({x,z})=>({x,z})),buildings:buildings.map(({type,x,z,rotation,open,groupId,elevation,bedId})=>({type,x,z,rotation,open:!!open,groupId,elevation,bedId})),activeTool};
   if(!cloudReady||!cloudWorldId)return;
   cloudPending=state;
   if(!cloudBusy)flushCloudSave();
@@ -1108,6 +1134,7 @@ function loadGame(state){
   const [x,z]=state.pos;if(!Number.isFinite(x)||!Number.isFinite(z))return;
   player.pos.x=x;player.pos.z=z;
   if(state.home&&Number.isFinite(state.home.x)&&Number.isFinite(state.home.z))homePosition={x:state.home.x,z:state.home.z};
+  homeBedId=Number.isInteger(state.homeBedId)?state.homeBedId:null;nextBedId=Number.isInteger(state.nextBedId)?state.nextBedId:1;
   yaw=Number.isFinite(state.yaw)?state.yaw:0;pitch=Number.isFinite(state.pitch)?THREE.MathUtils.clamp(state.pitch,-1.45,1.45):0;
   for(const k of ['health','hunger','thirst'])if(Number.isFinite(state[k]))player[k]=THREE.MathUtils.clamp(state[k],0,100);
   for(const k of Object.keys(inventory))if(Number.isFinite(state.inventory?.[k]))inventory[k]=Math.max(0,Math.floor(state.inventory[k]));
@@ -1197,11 +1224,7 @@ function drawMinimap(now){
  c.beginPath();c.moveTo(0,-8);c.lineTo(-5,6);c.lineTo(5,6);c.closePath();c.fill();c.stroke();c.restore();
  document.querySelector('#coords').textContent=`X ${player.pos.x.toFixed(1)} · Y ${(player.pos.y-1.7).toFixed(1)} · Z ${player.pos.z.toFixed(1)}`;
 }
-document.querySelector('#setHome').addEventListener('click',()=>{
- homePosition={x:player.pos.x,z:player.pos.z};
- saveGame(true);
- toast('⌂ Zuhause markiert und in der Cloud gespeichert.');
-});
+
 let last=performance.now();
 function animate(now){
  requestAnimationFrame(animate);const dt=Math.min((now-last)/1000,.05);last=now;elapsed+=dt;
