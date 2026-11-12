@@ -113,7 +113,7 @@ button:hover{background:#416445}button:disabled{opacity:.35;cursor:not-allowed}
 <body class="in-main-menu">
 <div id="game"></div>
 <div id="start"><div class="card panel">
-<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.8.19</div>
+<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.8.20</div>
 <p>Erkunde eine unebene Waldlandschaft, sammle Rohstoffe, stelle eine Axt her und bearbeite Bäume und Felsen. Deine private Survival-Welt wird mit deinem Konto online gespeichert.</p>
 <p><b>WASD</b> bewegen · <b>Maus</b> umsehen · <b>E</b> sammeln · <b>Shift</b> sprinten · <b>I</b> Inventar · <b>C</b> Crafting · <b>1–4</b> Schnellauswahl · <b>R</b> drehen · <b>E</b> platzieren · <b>Esc</b> Maus lösen</p>
 <section id="cloudLogin" style="margin:14px auto;padding:12px;border:1px solid #658c6d;border-radius:10px;max-width:400px;background:#10231b">
@@ -1075,7 +1075,7 @@ function updatePlacement(){
  }
  p.groupId=groupId;
  // Build pieces inherit the actual top surface of raised platforms.
- p.elevation=support?deckY(support):(FOUNDATION_TYPES.includes(p.type)?terrainTop(x,z,rotation)+(FLOOR_OFFSET[p.type]||0):terrainHeight(x,z));
+ p.elevation=support?(FOUNDATION_TYPES.includes(p.type)?deckY(support):deckSurface(support)):(FOUNDATION_TYPES.includes(p.type)?terrainTop(x,z,rotation)+(FLOOR_OFFSET[p.type]||0):terrainHeight(x,z));
  p.mesh.position.set(x,p.elevation-(FLOOR_OFFSET[p.type]||0),z);p.mesh.rotation.y=rotation;
  setSupportPosts(p.mesh,p.type,x,z,rotation,true);
  p.rotation=rotation;
@@ -1099,8 +1099,6 @@ function updatePlacement(){
   for(const b of campfires)if(Math.hypot(x-b.x,z-b.z)<radius+1)valid=false;
  }
  // Auf stark geneigtem Terrain nicht bauen; Fundamente koennen sonst schweben.
- if(['wall','door','window','stairs'].includes(p.type)&&Math.hypot(x-player.pos.x,z-player.pos.z)<1.15)valid=false;
-
  if(['wall','door','window','stairs'].includes(p.type)&&Math.hypot(x-player.pos.x,z-player.pos.z)<1.15)valid=false;
 
  p.valid=valid;
