@@ -113,7 +113,7 @@ button:hover{background:#416445}button:disabled{opacity:.35;cursor:not-allowed}
 <body class="in-main-menu">
 <div id="game"></div>
 <div id="start"><div class="card panel">
-<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.8.26</div>
+<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.8.27</div>
 <p>Erkunde eine unebene Waldlandschaft, sammle Rohstoffe, stelle eine Axt her und bearbeite Bäume und Felsen. Deine private Survival-Welt wird mit deinem Konto online gespeichert.</p>
 <p><b>WASD</b> bewegen · <b>Maus</b> umsehen · <b>E</b> sammeln · <b>Shift</b> sprinten · <b>I</b> Inventar · <b>C</b> Crafting · <b>1–4</b> Schnellauswahl · <b>R</b> drehen · <b>E</b> platzieren · <b>Esc</b> Maus lösen</p>
 <section id="cloudLogin" style="margin:14px auto;padding:12px;border:1px solid #658c6d;border-radius:10px;max-width:400px;background:#10231b">
@@ -739,7 +739,7 @@ function resolveCollision(candidate){
    if(feet>=deckSurface(b)-.10)continue;
    // Allow walking from the last stair tread onto the platform edge.
    const stairHere=stairSurface(candidate.x,candidate.z);
-   if(stairHere!==null&&feet>=stairHere-.65&&deckSurface(b)-feet<=.80)continue;
+   if(stairHere!==null&&feet>=stairHere-.85&&deckSurface(b)-feet<=1.0)continue;
    const c=Math.cos(b.rotation),sn=Math.sin(b.rotation);
    const dx=candidate.x-b.x,dz=candidate.z-b.z;
    let lx=dx*c+dz*sn,lz=-dx*sn+dz*c;
@@ -853,7 +853,9 @@ function movePlayer(move,distance){
   // Follow a smooth ramp while walking; never trigger repeated stair entry hops.
   const ramp=stairSurface(intended.x,intended.z);
   const feet=player.pos.y-1.7;
-  if(grounded&&ramp!==null&&ramp-feet<=.48&&ramp-feet>=-.70){
+  // On a ramp, keep feet glued to its continuous slope, including steep flights.
+  // Only attach when near the walking surface; never override an intentional jump.
+  if(grounded&&ramp!==null&&ramp-feet<=.85&&ramp-feet>=-1.0){
    player.pos.y=Math.max(terrainHeight(intended.x,intended.z),ramp)+1.7;
    verticalSpeed=0;
   }else if(stairSurface(player.pos.x,player.pos.z)===null&&ramp===null){
@@ -1345,7 +1347,7 @@ function animate(now){
   verticalSpeed-=15*dt;player.pos.y+=verticalSpeed*dt;
   const nextFeet=player.pos.y-1.7;
   const landingOnDeck=surface!==null&&verticalSpeed<=0&&currentFeet>=surface-.15&&nextFeet<=surface;
-  const stairFloor=stair!==null&&verticalSpeed<=0&&currentFeet>=stair-.65&&currentFeet<=stair+.70;
+  const stairFloor=stair!==null&&verticalSpeed<=0&&currentFeet>=stair-.85&&currentFeet<=stair+1.0;
   const floor=Math.max(terrain,landingOnDeck||surface!==null&&grounded&&Math.abs(currentFeet-surface)<.15?surface:terrain,stairFloor?stair:terrain);
   if(player.pos.y<=floor+1.7){player.pos.y=floor+1.7;verticalSpeed=0;grounded=true;}
   else grounded=false;
