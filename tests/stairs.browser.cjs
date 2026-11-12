@@ -5,7 +5,10 @@ const root=path.resolve(__dirname,'..');
  const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.addInitScript(()=>{window.requestAnimationFrame=()=>0;});
  let html=fs.readFileSync(path.join(root,'index.html'),'utf8');
- html=html.replace('window.wildFrontierReady=true;',`window.stairTest={THREE,buildings,objects,player,loadGame,addBuilding,stairSurface,stairLowerEnd,movePlayer,setWalking(){grounded=true;verticalSpeed=0;}};window.wildFrontierReady=true;`);
+ html=html.replace('window.wildFrontierReady=true;',`window.stairTest={...(await import('./src/stairs.js')),THREE,buildings,objects,player,loadGame,addBuilding,stairSurface,stairLowerEnd,movePlayer,advanceVertical,terrainHeight,stairDimensions,PLAYER,WALL_HEIGHT,worldToLocal,
+  setMotion(walking,velocity){grounded=walking;verticalSpeed=velocity;},motion(){return {grounded,verticalSpeed};},
+  previewAt(type,target){yaw=0;pitch=0;player.pos.set(target.x,target.y,target.z+2.6);placement={type,rotation:0,stairFlip:0,mesh:makeBuilding(type,0,0,0,true)};updatePlacement();return {type,x:placement.mesh.position.x,z:placement.mesh.position.z,rotation:placement.rotation,mesh:{position:{y:placement.elevation}}};},
+  setWalking(){grounded=true;verticalSpeed=0;}};window.wildFrontierReady=true;`);
  await page.route('**/*',async route=>{
   const url=new URL(route.request().url());
   if(url.hostname==='cdn.jsdelivr.net'&&process.env.THREE_MODULE_PATH)return route.fulfill({path:process.env.THREE_MODULE_PATH,contentType:'text/javascript',headers:{'access-control-allow-origin':'*'}});
@@ -43,6 +46,39 @@ const root=path.resolve(__dirname,'..');
    t.movePlayer(up.clone().negate(),4.7);
    near(t.player.pos.x,bottom.x,'descent X');near(t.player.pos.z,bottom.z,'descent Z');near(t.player.pos.y-1.7,17.12,'lower end after descent');
   }
+  for(const degrees of [0,90,180,270])for(const type of ['stairs','steepStairs']){
+   t.buildings.length=0;t.objects.length=0;const r=degrees*Math.PI/180,d=t.stairDimensions(type);
+   const frame={x:200,z:200,rotation:r};
+   function world(x,z){return new THREE.Vector3(x,0,z).applyAxisAngle(new THREE.Vector3(0,1,0),r).add(new THREE.Vector3(200,0,200));}
+   const low=world(0,d.length),top=t.terrainHeight(low.x,low.z)+d.drop+d.rise*.5;
+   const centre=world(0,-1.5);t.addBuilding('raisedFoundation',centre.x,centre.z,r,false,1,top-.12);
+   t.addBuilding(type,200,200,r,false,1,top);
+   near(t.buildings[1].mesh.children[0].geometry.parameters.width,d.halfWidth*2,'real tread width');
+   const start=world(0,d.length+.6);t.player.pos.set(start.x,t.terrainHeight(start.x,start.z)+t.PLAYER.eyeHeight,start.z);t.setWalking();
+   const up=new THREE.Vector3(-Math.sin(r),0,-Math.cos(r)),total=d.length+1.4;
+   for(const sign of [1,-1]){
+    let distance=0;
+    while(distance<total-1e-8){
+     const step=Math.min(.1,total-distance);distance+=step;t.movePlayer(up.clone().multiplyScalar(sign),step);t.advanceVertical(step/6);
+     const p=t.worldToLocal(frame,t.player.pos.x,t.player.pos.z),expected=sign===1?d.length+.6-distance:-.8+distance;
+     near(p.z,expected,'real terrain first-step traversal');near(t.motion().verticalSpeed,0,'no automatic hop');
+    }
+   }
+   t.buildings.length=0;t.addBuilding(type,200,200,r,false,1,20);
+   const mid=world(0,d.length/2),body=t.stairVolume(t.buildings[0],mid.x,mid.z);
+   t.player.pos.set(mid.x,body.bottom-t.PLAYER.headOffset-.05,mid.z);t.setMotion(false,7.1);t.advanceVertical(.1);
+   if(t.player.pos.y+t.PLAYER.headOffset>body.bottom+1e-6||t.motion().verticalSpeed>0)throw Error('underside jump');checks++;
+   const side=world(2,d.length/2);t.player.pos.set(side.x,t.terrainHeight(side.x,side.z)+t.PLAYER.eyeHeight,side.z);t.setWalking();
+   const across=new THREE.Vector3(-Math.cos(r),0,Math.sin(r));t.movePlayer(across,4);
+   near(t.worldToLocal(frame,t.player.pos.x,t.player.pos.z).x,-2,'real-mesh underpass');
+   t.player.pos.set(side.x,20-d.drop/2-.5+t.PLAYER.eyeHeight,side.z);t.setMotion(false,4);t.movePlayer(across,2);
+   if(t.worldToLocal(frame,t.player.pos.x,t.player.pos.z).x<d.halfWidth+t.PLAYER.radius-1e-6)throw Error('side jump entered body');checks++;
+   t.buildings.length=0;t.addBuilding('wall',200,200,r,false,1,10-t.WALL_HEIGHT);
+   for(const upward of [false,true]){
+    const preview=t.previewAt(type,{x:200,z:200,y:10+(upward?d.drop/2:-d.drop/2)});
+    const end=t.stairEnds(preview)[upward?1:0];near(end.x,200,'wall snap X');near(end.z,200,'wall snap Z');near(end.y,10,'wall crown elevation');
+   }
+  }
   return checks;
- });assert.deepEqual(errors,[]);console.log(`PASS browser: ${result} assertions using real Three.js meshes, 4 rotations, chained stairs, raised deck, save reload; no page errors`);
+ });assert.deepEqual(errors,[]);console.log(`PASS browser: ${result} assertions using real Three.js meshes, 4 rotations, real-terrain entry, chained stairs, raised deck, underside/side jumps, underpass, wall-top snaps and save reload; no page errors`);
 }finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});
