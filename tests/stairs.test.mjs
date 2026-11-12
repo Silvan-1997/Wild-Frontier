@@ -14,7 +14,7 @@ for(const degrees of [0,90,180,270]){
   for(const z of [0,d.length/4,d.length/2,d.length]){
    const p=world(0,z);near(c.stairSurface(p.x,p.z),3-d.drop*z/d.length,'ramp height');
   }
-  const side=world(1.3,d.length/2);assert.equal(c.stairSurface(side.x,side.z),null);
+  const side=world(1.7,d.length/2);assert.equal(c.stairSurface(side.x,side.z),null);
   const midpoint=world(0,d.length/2);
   assert.equal(stairs.stairWalkHeight(c.buildings,{...side,y:0},midpoint,3-d.drop/2),null,'no side pull-up');
   const bottom=world(0,d.length);c.player.pos=new Vector(bottom.x,3-d.drop+1.7,bottom.z);

@@ -79,6 +79,19 @@ const root=path.resolve(__dirname,'..');
     const end=t.stairEnds(preview)[upward?1:0];near(end.x,200,'wall snap X');near(end.z,200,'wall snap Z');near(end.y,10,'wall crown elevation');
    }
   }
+  for(const degrees of [0,90,180,270])for(const x of [-1.24,-1.21,0,1.21,1.24])for(const sign of [-1,1]){
+   t.buildings.length=0;t.objects.length=0;const rotation=degrees*Math.PI/180,frame={x:200,z:200,rotation};
+   const point=(x,z)=>new THREE.Vector3(x,0,z).applyAxisAngle(new THREE.Vector3(0,1,0),rotation).add(new THREE.Vector3(200,0,200));
+   t.addBuilding('stairs',200,200,rotation,false,1,20);
+   let z=sign===-1?.16:.5;const start=point(x,z);
+   t.player.pos.set(start.x,20-.7*z/2.75+t.PLAYER.eyeHeight,start.z);t.setWalking();
+   for(let i=0;i<30;i++){
+    z+=sign*.01;t.movePlayer(new THREE.Vector3(sign*Math.sin(rotation),0,sign*Math.cos(rotation)),.01);t.advanceVertical(1/60);
+    const p=t.worldToLocal(frame,t.player.pos.x,t.player.pos.z);
+    near(p.x,x,'flat tread edge: no sideways ejection');near(p.z,z,'flat tread edge: no extra forward movement');
+    near(t.player.pos.y-t.PLAYER.eyeHeight,20-.7*Math.max(0,z)/2.75,'flat tread edge: stable ramp support');
+   }
+  }
   return checks;
- });assert.deepEqual(errors,[]);console.log(`PASS browser: ${result} assertions using real Three.js meshes, 4 rotations, real-terrain entry, chained stairs, raised deck, underside/side jumps, underpass, wall-top snaps and save reload; no page errors`);
+ });assert.deepEqual(errors,[]);console.log(`PASS browser: ${result} assertions using real Three.js meshes, 4 rotations, real-terrain entry, chained stairs, raised deck, underside/side jumps, underpass, wall-top snaps save reload and flat-tread edge movement; no page errors`);
 }finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});
