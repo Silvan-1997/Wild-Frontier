@@ -113,7 +113,7 @@ button:hover{background:#416445}button:disabled{opacity:.35;cursor:not-allowed}
 <body class="in-main-menu">
 <div id="game"></div>
 <div id="start"><div class="card panel">
-<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.8.30</div>
+<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.8.31</div>
 <p>Erkunde eine unebene Waldlandschaft, sammle Rohstoffe, stelle eine Axt her und bearbeite Bäume und Felsen. Deine private Survival-Welt wird mit deinem Konto online gespeichert.</p>
 <p><b>WASD</b> bewegen · <b>Maus</b> umsehen · <b>E</b> sammeln · <b>Shift</b> sprinten · <b>I</b> Inventar · <b>C</b> Crafting · <b>1–4</b> Schnellauswahl · <b>R</b> drehen · <b>E</b> platzieren · <b>Esc</b> Maus lösen</p>
 <section id="cloudLogin" style="margin:14px auto;padding:12px;border:1px solid #658c6d;border-radius:10px;max-width:400px;background:#10231b">
@@ -743,9 +743,15 @@ function resolveCollision(candidate){
    const underside=b.mesh.position.y-d.drop*(nearZ/d.length)-.30;
    const feet=candidate.y-1.7,head=candidate.y;
    if(head<=underside+.02||feet>=top-.14)continue;
-   // A player already supported by this flight must be able to walk along it.
+   // Never let the solid-body collider fight the continuous walking ramp.
+   // Check the previous position too: steep slopes can move more than one tread
+   // during a frame, while their visible steps are deliberately not colliders.
    const walkingHeight=stairHeight(b,candidate.x,candidate.z);
-   if(walkingHeight!==null&&Math.abs(feet-walkingHeight)<.12)continue;
+   const previousHeight=stairHeight(b,player.pos.x,player.pos.z);
+   if(walkingHeight!==null&&(
+    Math.abs(feet-walkingHeight)<.30||
+    previousHeight!==null&&Math.abs(player.pos.y-1.7-previousHeight)<.30&&
+    Math.abs(feet-walkingHeight)<.40))continue;
    let pushX,pushZ;
    if(dist2>1e-10){
     const dist=Math.sqrt(dist2);
@@ -1116,6 +1122,30 @@ function updatePlacement(){
     else for(const [dx,dz,r] of [[1.5,0,Math.PI/2],[-1.5,0,Math.PI/2],[0,1.5,0],[0,-1.5,0]]){
      const v=rotateXZ(dx,dz,b.rotation);
      candidates.push({x:b.x+v.x,z:b.z+v.z,rotation:b.rotation+r,base:b});
+    }
+   }
+   // Upward stairs: the LOWER end sits on a foundation edge or wall top.
+   // The upper end extends away from the structure, allowing vertical builds.
+   if(STAIR_TYPES.includes(p.type)){
+    const dims=stairDimensions(p.type);
+    for(const b of foundations)for(const [dx,dz,r] of [[1.5,0,Math.PI/2],[-1.5,0,-Math.PI/2],[0,1.5,0],[0,-1.5,Math.PI]]){
+     const edge=rotateXZ(dx,dz,b.rotation);
+     const outward=rotateXZ(0,1,b.rotation+r);
+     candidates.push({x:b.x+edge.x+outward.x*dims.length,
+      z:b.z+edge.z+outward.z*dims.length,
+      rotation:b.rotation+r+Math.PI,base:b,
+      stairEndY:deckSurface(b)+dims.drop,stairChain:true,upward:true});
+    }
+    for(const b of buildings){
+     if(b.type!=='wall')continue;
+     const outward=rotateXZ(0,1,b.rotation);
+     const top=b.mesh.position.y+2.94;
+     for(const side of [-1,1]){
+      const v=rotateXZ(0,side*dims.length,b.rotation);
+      candidates.push({x:b.x+v.x,z:b.z+v.z,
+       rotation:b.rotation+(side===1?Math.PI:0),base:b,
+       stairEndY:top+dims.drop,stairChain:true,upward:true});
+     }
     }
    }
    // Stair-to-stair snapping: next flight begins at the previous flight's lower end.
