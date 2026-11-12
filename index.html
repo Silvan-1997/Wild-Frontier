@@ -238,6 +238,7 @@ window.addEventListener('error',function(e){if(!window.wildFrontierReady){const 
 <script type="module">
 import {riverCenter,riverDistance,inRiver,safeResourcePosition,terrainHeight} from "./src/terrain.js";
 import {createClient} from "https://esm.sh/@supabase/supabase-js@2";
+import {worldToLocal,stairDimensions,stairSurfaceAt,stairWalkHeight,stairHeight,stairJoinsDeck,isStair} from "./src/stairs.js";
 import {createGraphicsSettings} from "./src/graphics.js";
 const supabase=createClient('https://qoeqnijggilzfenvuopo.supabase.co','sb_publishable_DbEv-bbtemO0iKeKhg73xQ_xYjOqJMd');
 let cloudUser=null,cloudWorldId=null,cloudReady=false,cloudBusy=false,cloudPending=null,cloudSaveTimer=null;
@@ -734,27 +735,24 @@ function resolveCollision(candidate){
    // Detect actual deck clearance rather than relying on the building type.
    const ground=terrainHeight(b.x,b.z);
    if(deckSurface(b)-ground<.48)continue;
-   const feet=player.pos.y-1.7;
+   const feet=candidate.y-1.7;
    // Small ledges can be stepped onto while grounded; tall ones remain solid.
    if(feet>=deckSurface(b)-.10)continue;
-   // Allow walking from the last stair tread onto the platform edge.
-   const stairHere=stairSurface(candidate.x,candidate.z);
-   // The staircase forms a walkable opening through the platform side collision.
-   // Limit the opening to a ramp directly meeting this platform's top.
-   if(stairHere!==null&&Math.abs(deckSurface(b)-stairHere)<.65&&feet>=stairHere-.75)continue;
+   // Open only the attached flight's corridor, with actual ramp contact.
+   if(buildings.some(stair=>isStair(stair)&&stairJoinsDeck(stair,b,deckSurface(b))&&
+    stairHeight(stair,candidate.x,candidate.z)!==null&&
+    Math.abs(feet-stairHeight(stair,candidate.x,candidate.z))<.01))continue;
    const c=Math.cos(b.rotation),sn=Math.sin(b.rotation);
-   const dx=candidate.x-b.x,dz=candidate.z-b.z;
-   let lx=dx*c+dz*sn,lz=-dx*sn+dz*c;
+   let {x:lx,z:lz}=worldToLocal(b,candidate.x,candidate.z);
    const bound=1.5+radius;
    if(Math.abs(lx)>=bound||Math.abs(lz)>=bound)continue;
    // Choose the nearest exit; prefer the approach side if already outside.
-   const oldX=player.pos.x-b.x,oldZ=player.pos.z-b.z;
-   const oldLX=oldX*c+oldZ*sn,oldLZ=-oldX*sn+oldZ*c;
+   const {x:oldLX,z:oldLZ}=worldToLocal(b,player.pos.x,player.pos.z);
    if(Math.abs(oldLX)>=bound&&Math.abs(oldLZ)<bound)lx=Math.sign(oldLX)*bound;
    else if(Math.abs(oldLZ)>=bound&&Math.abs(oldLX)<bound)lz=Math.sign(oldLZ)*bound;
    else if(bound-Math.abs(lx)<bound-Math.abs(lz))lx=(lx>=0?bound:-bound);
    else lz=(lz>=0?bound:-bound);
-   candidate.x=b.x+lx*c-lz*sn;candidate.z=b.z+lx*sn+lz*c;
+   candidate.x=b.x+lx*c+lz*sn;candidate.z=b.z-lx*sn+lz*c;
    corrected=true;
   }
   // Oriented wall / door slabs: circle against a finite rotated rectangle.
@@ -762,8 +760,7 @@ function resolveCollision(candidate){
   for(const b of buildings){
    if(b.type!=='wall'&&b.type!=='door'&&b.type!=='window' || b.type==='door'&&b.open)continue;
    const c=Math.cos(b.rotation),sn=Math.sin(b.rotation);
-   const dx=candidate.x-b.x,dz=candidate.z-b.z;
-   const lx=dx*c+dz*sn,lz=-dx*sn+dz*c;
+   const {x:lx,z:lz}=worldToLocal(b,candidate.x,candidate.z);
    const halfWidth=b.type==='door'?1.16:1.50,halfDepth=b.type==='door'?.10:.13;
    const nearestX=Math.max(-halfWidth,Math.min(halfWidth,lx));
    const nearestZ=Math.max(-halfDepth,Math.min(halfDepth,lz));
@@ -772,8 +769,8 @@ function resolveCollision(candidate){
     let correctionX=0,correctionZ=0;
     if(d2>1e-9){const d=Math.sqrt(d2);correctionX=vx*(radius-d)/d;correctionZ=vz*(radius-d)/d;}
     else{const side=lz>=0?1:-1;correctionZ=side*(halfDepth+radius)-lz;}
-    candidate.x+=correctionX*c-correctionZ*sn;
-    candidate.z+=correctionX*sn+correctionZ*c;
+    candidate.x+=correctionX*c+correctionZ*sn;
+    candidate.z+=-correctionX*sn+correctionZ*c;
     corrected=true;
    }
   }
@@ -782,30 +779,14 @@ function resolveCollision(candidate){
  // Open-world movement: no legacy 220 m boundary.
  return candidate;
 }
-// Walkable stair treads: derive the collision height from the same dimensions as the meshes.
-// Continuous invisible collision ramp; visual wooden steps remain unchanged.
-// Continuous invisible walking plane, independent of the visible wooden treads.
-function stairSurface(x,z){
- let best=null;
- for(const b of buildings){
-  if(b.type!=='stairs'&&b.type!=='steepStairs')continue;
-  const d=stairDimensions(b.type),c=Math.cos(b.rotation),sn=Math.sin(b.rotation);
-  const dx=x-b.x,dz=z-b.z,lx=dx*c+dz*sn,lz=-dx*sn+dz*c;
-  if(Math.abs(lx)>1.20||lz<-.22||lz>d.length+.22)continue;
-  // The attachment end is the high end; lower end may be buried in terrain.
-  const progress=Math.max(0,Math.min(1,lz/d.length));
-  const y=b.mesh.position.y-d.drop*progress+.08;
-  if(best===null||y>best)best=y;
- }
- return best;
-}
+// Match the mesh transform and the saved upper/lower attachment elevations.
+function stairSurface(x,z){return stairSurfaceAt(buildings,x,z);}
 function foundationSurface(x,z){
  let top=null;
  for(const b of buildings){
   if(!['foundation','raisedFoundation'].includes(b.type))continue;
-  const dx=x-b.x,dz=z-b.z,c=Math.cos(b.rotation),sn=Math.sin(b.rotation);
-  const lx=dx*c+dz*sn,lz=-dx*sn+dz*c;
-  if(Math.abs(lx)<=1.47&&Math.abs(lz)<=1.47){
+  const {x:lx,z:lz}=worldToLocal(b,x,z);
+  if(Math.abs(lx)<=1.5+1e-8&&Math.abs(lz)<=1.5+1e-8){
    const deck=deckSurface(b);
    if(top===null||deck>top)top=deck;
   }
@@ -836,13 +817,10 @@ function autoHopAtLowFoundation(nextX,nextZ){
   if(!FOUNDATION_TYPES.includes(b.type))continue;
   const rise=deckSurface(b)-feet;
   if(rise<=.08||rise>STEP_HEIGHT)continue;
-  const c=Math.cos(b.rotation),sn=Math.sin(b.rotation);
-  const dx=nextX-b.x,dz=nextZ-b.z;
-  const lx=dx*c+dz*sn,lz=-dx*sn+dz*c;
+  const {x:lx,z:lz}=worldToLocal(b,nextX,nextZ);
   // Only hop when approaching the platform footprint, not while walking nearby.
   if(Math.abs(lx)>1.5+.38||Math.abs(lz)>1.5+.38)continue;
-  const oldDx=player.pos.x-b.x,oldDz=player.pos.z-b.z;
-  const oldX=oldDx*c+oldDz*sn,oldZ=-oldDx*sn+oldDz*c;
+  const {x:oldX,z:oldZ}=worldToLocal(b,player.pos.x,player.pos.z);
   if(Math.abs(oldX)<1.45&&Math.abs(oldZ)<1.45)continue;
   verticalSpeed=Math.sqrt(2*15*(rise+.16));
   grounded=false;
@@ -853,25 +831,20 @@ function movePlayer(move,distance){
  const count=Math.max(1,Math.ceil(distance/.08)),step=distance/count;
  for(let i=0;i<count;i++){
   const intended=player.pos.clone().addScaledVector(move,step);
-  const ramp=stairSurface(intended.x,intended.z);
-  const oldRamp=stairSurface(player.pos.x,player.pos.z);
-  const feet=player.pos.y-1.7;
   const walking=grounded&&verticalSpeed<=0;
-  // Ramp contact is continuous: no per-step snapping or automatic jumping.
-  if(walking&&ramp!==null&&ramp-feet<.55&&ramp-feet>-.9){
-   player.pos.y=Math.max(terrainHeight(intended.x,intended.z),ramp)+1.7;
-   verticalSpeed=0;
-  }else if(oldRamp===null&&ramp===null){
+  const ramp=walking?stairWalkHeight(buildings,player.pos,intended,player.pos.y-1.7):null;
+  if(ramp!==null)intended.y=Math.max(terrainHeight(intended.x,intended.z),ramp)+1.7;
+  else if(stairSurface(player.pos.x,player.pos.z)===null&&stairSurface(intended.x,intended.z)===null){
    autoHopAtLowFoundation(intended.x,intended.z);
   }
+  // Resolve against the same height that will be committed, then recheck support
+  // at the corrected X/Z (a wall may have pushed us away from the ramp).
   const candidate=resolveCollision(intended);
+  const support=walking?stairWalkHeight(buildings,player.pos,candidate,player.pos.y-1.7):null;
+  const deck=foundationSurface(candidate.x,candidate.z);
+  if(support!==null){player.pos.y=Math.max(terrainHeight(candidate.x,candidate.z),support)+1.7;verticalSpeed=0;}
+  else if(walking&&deck!==null&&Math.abs(deck-(player.pos.y-1.7))<.10){player.pos.y=deck+1.7;verticalSpeed=0;}
   player.pos.x=candidate.x;player.pos.z=candidate.z;
-  if(walking&&oldRamp!==null&&ramp===null){
-   const deck=foundationSurface(candidate.x,candidate.z);
-   if(deck!==null&&Math.abs(deck-(player.pos.y-1.7))<.55){
-    player.pos.y=Math.max(player.pos.y,deck+1.7);verticalSpeed=0;
-   }
-  }
  }
 }
 function collect(){
@@ -1076,7 +1049,6 @@ function rotatePlacement(degrees=90){
 function cancelPlacement(){if(rotationPress){rotationPress.long=true;stopRotationPress();}if(!placement)return;scene.remove(placement.mesh);placement.mesh.traverse(o=>{if(o.geometry)o.geometry.dispose();});placement=null;document.querySelector('#buildQuick').hidden=true;document.querySelector('#buildInfo').hidden=true;document.querySelector('#buildPalette').hidden=true;document.querySelector('#touchCollect').textContent='AKTION';}
 const GRID=3;
 const STAIR_TYPES=['stairs','steepStairs'];
-function stairDimensions(type){return type==='steepStairs'?{length:6*.35,drop:6*.24}:{length:5*.55,drop:5*.14};}
 function stairLowerEnd(b){const d=stairDimensions(b.type),v=rotateXZ(0,d.length,b.rotation);return {x:b.x+v.x,z:b.z+v.z,y:b.mesh.position.y-d.drop};}
 function cellKey(x,z){return `${Math.round(x/GRID)},${Math.round(z/GRID)}`;}
 function edgeKey(x,z,rotation){return `${Math.round(x/1.5)},${Math.round(z/1.5)},${Math.round(Math.cos(rotation))===0?'x':'z'}`;}
@@ -1262,7 +1234,9 @@ function loadGame(state){
    for(let i=0;i<Math.min(saved.length,buildings.length);i++)if(buildings[i].type==='bed'&&Number.isInteger(saved[i].bedId))buildings[i].bedId=saved[i].bedId;
   }
   nextBedId=Math.max(nextBedId,...buildings.filter(b=>b.type==='bed').map(b=>b.bedId+1));
-  resolveCollision(player.pos);player.pos.y=terrainHeight(player.pos.x,player.pos.z)+1.7;verticalSpeed=0;grounded=true;
+  // Version 4 stores X/Z only: reconstruct support after all buildings exist.
+  player.pos.y=Math.max(terrainHeight(player.pos.x,player.pos.z),foundationSurface(player.pos.x,player.pos.z)??-Infinity,stairSurface(player.pos.x,player.pos.z)??-Infinity)+1.7;
+  resolveCollision(player.pos);verticalSpeed=0;grounded=true;
   document.querySelector('#equipAxe').textContent=axeEquipped?'Axt ablegen':'Axt ausrüsten';
   updateInv();document.querySelector('#saveStatus').textContent='Spielstand geladen · automatische Sicherung aktiv';
  }catch(e){document.querySelector('#saveStatus').textContent='Spielstand konnte nicht geladen werden';}
@@ -1356,7 +1330,8 @@ function animate(now){
   verticalSpeed-=15*dt;player.pos.y+=verticalSpeed*dt;
   const nextFeet=player.pos.y-1.7;
   const landingOnDeck=surface!==null&&verticalSpeed<=0&&currentFeet>=surface-.15&&nextFeet<=surface;
-  const stairFloor=stair!==null&&verticalSpeed<=0&&currentFeet>=stair-.70&&currentFeet<=stair+.85;
+  const stairFloor=stair!==null&&verticalSpeed<=0&&
+   (currentFeet>=stair-.001&&nextFeet<=stair||grounded&&Math.abs(currentFeet-stair)<.01);
   const floor=Math.max(terrain,landingOnDeck||surface!==null&&grounded&&Math.abs(currentFeet-surface)<.15?surface:terrain,stairFloor?stair:terrain);
   if(player.pos.y<=floor+1.7){player.pos.y=floor+1.7;verticalSpeed=0;grounded=true;}
   else grounded=false;
