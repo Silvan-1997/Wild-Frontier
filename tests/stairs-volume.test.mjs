@@ -159,7 +159,7 @@ test('falling onto lateral slab edge cannot pass through the body',()=>{
  const g=harness(-10);g.addBuilding('steepStairs',0,0,0,false,1,6);
  const b=g.buildings[0],x=1.4,z=1.05,top=stairVolume(b,x,z).top;
  setPlayer(g,{x,z},top+.3);g.grounded=false;g.verticalSpeed=-4;g.advanceVertical(.3);
- near(g.player.pos.y-PLAYER.eyeHeight,top);assert.equal(g.grounded,true);
+ near(g.player.pos.y-PLAYER.eyeHeight,6-1.44*z/2.1);assert.equal(g.grounded,true);
 });
 test('new version-4 saves preserve being underneath a flight; legacy saves still reconstruct support',()=>{
  const g=harness(0);g.addBuilding('steepStairs',0,0,0,false,1,6);setPlayer(g,{x:0,z:1},0);g.saveGame(true);

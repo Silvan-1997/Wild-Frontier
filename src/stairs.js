@@ -20,9 +20,12 @@ export function stairEnds(b){
  const d=stairDimensions(b.type),lower=localToWorld(b,0,d.length);
  return [{x:b.x,z:b.z,y:b.mesh.position.y},{...lower,y:b.mesh.position.y-d.drop}];
 }
-export function stairHeight(b,x,z,endRadius=0){
+export function stairHeight(b,x,z,footRadius=0){
  const p=worldToLocal(b,x,z),d=stairDimensions(b.type);
- if(Math.abs(p.x)>d.halfWidth-.05+EPS||p.z< -endRadius-EPS||p.z>d.length+endRadius+EPS)return null;
+ const dx=Math.max(0,Math.abs(p.x)-d.halfWidth),dz=Math.max(0,-p.z,p.z-d.length);
+ // Support and the solid body use the same footprint. The foot cylinder may
+ // overlap an edge; there is no unsupported strip inside the visible tread.
+ if(footRadius===0?(dx>EPS||dz>EPS):Math.hypot(dx,dz)>=footRadius-EPS)return null;
  return plane(b,p.z);
 }
 export function stairSurfaceAt(buildings,x,z){
@@ -55,7 +58,7 @@ function walkContact(buildings,from,to,feet,terrain){
   if(!isStair(b))continue;
   const d=stairDimensions(b.type),p=worldToLocal(b,to.x,to.z),old=worldToLocal(b,from.x,from.z);
   let height=walkingHeight(b,to.x,to.z,terrain);
-  if(height===null&&p.z>d.length+PLAYER.radius&&Math.abs(p.x)<=d.halfWidth-.05+EPS&&
+  if(height===null&&p.z>d.length+PLAYER.radius&&Math.abs(p.x)<d.halfWidth+PLAYER.radius-EPS&&
    old.z>=d.length&&old.z<=d.length+PLAYER.radius+EPS){
    const end=localToWorld(b,0,d.length),gap=b.mesh.position.y-d.drop-terrain(end.x,end.z);
    if(gap>0&&gap<=d.thickness+EPS)height=terrain(to.x,to.z);
@@ -63,7 +66,7 @@ function walkContact(buildings,from,to,feet,terrain){
   if(height===null)continue;
   // Body contact starts one radius before the end, not at the centre's crossing.
   // Side entry is never a route onto the ramp, even at similar heights.
-  if(Math.abs(old.x)>d.halfWidth-.05+EPS)continue;
+  if(Math.abs(old.x)>=d.halfWidth+PLAYER.radius-EPS)continue;
   const oldY=entryPlane(b,old,terrain),oldFloor=Math.max(oldY,terrain(from.x,from.z));
   const crossingEnd=(old.z<0&&p.z>=-EPS||old.z>d.length&&p.z<=d.length+EPS);
   const connected=crossingEnd&&buildings.some(other=>{
@@ -103,7 +106,8 @@ export function resolveStairSides(buildings,from,candidate,{grounded=false,veloc
   if(!isStair(b))continue;
   const volume=stairVolume(b,candidate.x,candidate.z);if(!volume)continue;
   const feet=candidate.y-PLAYER.eyeHeight,head=candidate.y+PLAYER.headOffset;
-  if(head<=volume.bottom+EPS||feet>=volume.top-EPS||supportedBody(b,contact,candidate))continue;
+  const surface=stairHeight(b,candidate.x,candidate.z,PLAYER.radius);
+  if(head<=volume.bottom+EPS||surface!==null&&feet>=surface-EPS||supportedBody(b,contact,candidate))continue;
   const d=stairDimensions(b.type),p=volume.local;
   const nx=clamp(p.x,-d.halfWidth,d.halfWidth),nz=clamp(p.z,0,d.length);
   const vx=p.x-nx,vz=p.z-nz,dist=Math.hypot(vx,vz);
@@ -136,10 +140,10 @@ export function advancePlayerVertical({buildings,position,velocity,grounded,dt,t
   if(deck!==null&&oldFeet>=deck-CONTACT&&nextY-PLAYER.eyeHeight<=deck)floor=Math.max(floor,deck);
   if(velocity<=0)for(const b of buildings){
    if(!isStair(b))continue;
-   const centre=grounded?walkingHeight(b,position.x,position.z,terrain):stairHeight(b,position.x,position.z);
-   // A vertical fall onto an edge must also meet the solid body, even when
-   // the centre is outside the narrower walking corridor.
-   const y=centre??stairVolume(b,position.x,position.z)?.top??null;
+   // Land and walk on the same plane, including partial foot overlap at an
+   // edge. A separate "highest point under the cylinder" produced a different
+   // standing height here, so the next horizontal step lost its support.
+   const y=grounded?walkingHeight(b,position.x,position.z,terrain):stairHeight(b,position.x,position.z,PLAYER.radius);
    if(y!==null&&oldFeet>=y-CONTACT&&nextY-PLAYER.eyeHeight<=y)floor=Math.max(floor,y);
   }
   grounded=nextY-PLAYER.eyeHeight<=floor+EPS;
