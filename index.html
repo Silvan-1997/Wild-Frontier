@@ -113,7 +113,7 @@ button:hover{background:#416445}button:disabled{opacity:.35;cursor:not-allowed}
 <body class="in-main-menu">
 <div id="game"></div>
 <div id="start"><div class="card panel">
-<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.8.25</div>
+<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.8.26</div>
 <p>Erkunde eine unebene Waldlandschaft, sammle Rohstoffe, stelle eine Axt her und bearbeite Bäume und Felsen. Deine private Survival-Welt wird mit deinem Konto online gespeichert.</p>
 <p><b>WASD</b> bewegen · <b>Maus</b> umsehen · <b>E</b> sammeln · <b>Shift</b> sprinten · <b>I</b> Inventar · <b>C</b> Crafting · <b>1–4</b> Schnellauswahl · <b>R</b> drehen · <b>E</b> platzieren · <b>Esc</b> Maus lösen</p>
 <section id="cloudLogin" style="margin:14px auto;padding:12px;border:1px solid #658c6d;border-radius:10px;max-width:400px;background:#10231b">
@@ -739,7 +739,7 @@ function resolveCollision(candidate){
    if(feet>=deckSurface(b)-.10)continue;
    // Allow walking from the last stair tread onto the platform edge.
    const stairHere=stairSurface(candidate.x,candidate.z);
-   if(stairHere!==null&&feet>=stairHere-.38&&deckSurface(b)-feet<=.52)continue;
+   if(stairHere!==null&&feet>=stairHere-.65&&deckSurface(b)-feet<=.80)continue;
    const c=Math.cos(b.rotation),sn=Math.sin(b.rotation);
    const dx=candidate.x-b.x,dz=candidate.z-b.z;
    let lx=dx*c+dz*sn,lz=-dx*sn+dz*c;
@@ -781,16 +781,16 @@ function resolveCollision(candidate){
  return candidate;
 }
 // Walkable stair treads: derive the collision height from the same dimensions as the meshes.
+// Continuous invisible collision ramp; visual wooden steps remain unchanged.
 function stairSurface(x,z){
  let top=null;
  for(const b of buildings){
   if(b.type!=='stairs'&&b.type!=='steepStairs')continue;
   const d=stairDimensions(b.type),c=Math.cos(b.rotation),sn=Math.sin(b.rotation);
   const dx=x-b.x,dz=z-b.z,lx=dx*c+dz*sn,lz=-dx*sn+dz*c;
-  if(Math.abs(lx)>1.23||lz<-.22||lz>d.length+.22)continue;
-  const count=b.type==='steepStairs'?6:5,depth=d.length/count,rise=d.drop/count;
-  const index=Math.min(count-1,Math.max(0,Math.floor(Math.max(0,lz)/depth)));
-  const y=b.mesh.position.y-(index+1)*rise+.16;
+  if(Math.abs(lx)>1.22||lz<-.24||lz>d.length+.18)continue;
+  const progress=Math.max(0,Math.min(1,lz/d.length));
+  const y=b.mesh.position.y-d.drop*progress+.08;
   if(top===null||y>top)top=y;
  }
  return top;
@@ -850,16 +850,15 @@ function movePlayer(move,distance){
  const count=Math.max(1,Math.ceil(distance/.16)),step=distance/count;
  for(let i=0;i<count;i++){
   const intended=player.pos.clone().addScaledVector(move,step);
-  // Step onto and along existing stair treads before resolving foundation sides.
-  const tread=stairSurface(intended.x,intended.z);
+  // Follow a smooth ramp while walking; never trigger repeated stair entry hops.
+  const ramp=stairSurface(intended.x,intended.z);
   const feet=player.pos.y-1.7;
-  if(grounded&&tread!==null&&tread-feet<=.55&&tread-feet>=-.55){
-   player.pos.y=tread+1.7;
+  if(grounded&&ramp!==null&&ramp-feet<=.48&&ramp-feet>=-.70){
+   player.pos.y=Math.max(terrainHeight(intended.x,intended.z),ramp)+1.7;
    verticalSpeed=0;
-  }else if(grounded&&tread!==null&&tread-feet>.55&&tread-feet<1.65){
-   // A staircase whose lowest tread is above the terrain needs a small assisted entry hop.
-   verticalSpeed=Math.sqrt(2*15*(tread-feet+.12));grounded=false;
-  }else autoHopAtLowFoundation(intended.x,intended.z);
+  }else if(stairSurface(player.pos.x,player.pos.z)===null&&ramp===null){
+   autoHopAtLowFoundation(intended.x,intended.z);
+  }
   const candidate=resolveCollision(intended);
   player.pos.x=candidate.x;player.pos.z=candidate.z;
  }
@@ -1346,7 +1345,7 @@ function animate(now){
   verticalSpeed-=15*dt;player.pos.y+=verticalSpeed*dt;
   const nextFeet=player.pos.y-1.7;
   const landingOnDeck=surface!==null&&verticalSpeed<=0&&currentFeet>=surface-.15&&nextFeet<=surface;
-  const stairFloor=stair!==null&&verticalSpeed<=0&&currentFeet>=stair-.55&&currentFeet<=stair+.55;
+  const stairFloor=stair!==null&&verticalSpeed<=0&&currentFeet>=stair-.65&&currentFeet<=stair+.70;
   const floor=Math.max(terrain,landingOnDeck||surface!==null&&grounded&&Math.abs(currentFeet-surface)<.15?surface:terrain,stairFloor?stair:terrain);
   if(player.pos.y<=floor+1.7){player.pos.y=floor+1.7;verticalSpeed=0;grounded=true;}
   else grounded=false;
