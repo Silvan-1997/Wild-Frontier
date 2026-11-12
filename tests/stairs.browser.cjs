@@ -92,6 +92,25 @@ const root=path.resolve(__dirname,'..');
     near(t.player.pos.y-t.PLAYER.eyeHeight,20-.7*Math.max(0,z)/2.75,'flat tread edge: stable ramp support');
    }
   }
+  for(const [upperType,lowerType] of [['stairs','stairs'],['steepStairs','steepStairs'],['stairs','steepStairs'],['steepStairs','stairs']])
+  for(const degrees of [0,90,180,270])for(const x of [-1.5,-1.24,-.75,0,.75,1.24,1.5])for(const sign of [-1,1]){
+   t.buildings.length=0;t.objects.length=0;const rotation=degrees*Math.PI/180,frame={x:200,z:200,rotation};
+   const a=t.stairDimensions(upperType),b=t.stairDimensions(lowerType);
+   t.addBuilding(upperType,200,200,rotation,false,1,20);
+   const joint=t.stairEnds(t.buildings[0])[1];t.addBuilding(lowerType,joint.x,joint.z,rotation,false,1,joint.y);
+   const height=z=>z<=a.length?20-a.drop*z/a.length:20-a.drop-b.drop*(z-a.length)/b.length;
+   const startZ=a.length-sign*.7;
+   const start=new THREE.Vector3(x,0,startZ).applyAxisAngle(new THREE.Vector3(0,1,0),rotation).add(new THREE.Vector3(200,0,200));
+   const saved=t.buildings.map(({type,x,z,rotation,elevation,groupId})=>({type,x,z,rotation,elevation,groupId}));
+   // Load real meshes in reverse order, at an off-centre standing position.
+   t.buildings.length=0;t.loadGame({version:4,pos:[start.x,start.z],playerY:height(startZ)+t.PLAYER.eyeHeight,buildings:saved.reverse()});t.setWalking();
+   for(let i=1;i<=14;i++){
+    t.movePlayer(new THREE.Vector3(sign*Math.sin(rotation),0,sign*Math.cos(rotation)),.1);t.advanceVertical(1/60);
+    const p=t.worldToLocal(frame,t.player.pos.x,t.player.pos.z),z=startZ+sign*.1*i;
+    near(p.x,x,'full-width stair joint: no lateral correction');near(p.z,z,'full-width stair joint: exact input progress');
+    near(t.player.pos.y-t.PLAYER.eyeHeight,height(z),'full-width stair joint: continuous support');
+   }
+  }
   return checks;
- });assert.deepEqual(errors,[]);console.log(`PASS browser: ${result} assertions using real Three.js meshes, 4 rotations, real-terrain entry, chained stairs, raised deck, underside/side jumps, underpass, wall-top snaps save reload and flat-tread edge movement; no page errors`);
+ });assert.deepEqual(errors,[]);console.log(`PASS browser: ${result} assertions using real Three.js meshes, 4 rotations, real-terrain entry, chained stairs, raised deck, underside/side jumps, underpass, wall-top snaps save reload flat-tread edge movement and full-width stair joints; no page errors`);
 }finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});

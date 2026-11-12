@@ -71,7 +71,7 @@ function walkContact(buildings,from,to,feet,terrain){
   const crossingEnd=(old.z<0&&p.z>=-EPS||old.z>d.length&&p.z<=d.length+EPS);
   const connected=crossingEnd&&buildings.some(other=>{
    if(other===b||!isStair(other)||!commonEnd(other,b))return false;
-   const h=stairHeight(other,from.x,from.z);
+   const h=walkingHeight(other,from.x,from.z,terrain);
    return h!==null&&Math.abs(Math.max(h,terrain(from.x,from.z))-feet)<=CONTACT;
   });
   if(Math.abs(oldFloor-feet)>CONTACT&&!connected)continue;
@@ -93,11 +93,17 @@ export function stairVolume(b,x,z){
  return {top:plane(b,lo),bottom:plane(b,hi)-d.thickness,local:p};
 }
 function commonEnd(a,b){return stairEnds(a).find(p=>stairEnds(b).some(q=>Math.hypot(p.x-q.x,p.z-q.z)<CONTACT&&Math.abs(p.y-q.y)<CONTACT));}
+function footTouchesEndEdge(stair,joint,point){
+ const p=worldToLocal(stair,point.x,point.z),end=worldToLocal(stair,joint.x,joint.z);
+ const outsideWidth=Math.max(0,Math.abs(p.x)-stairDimensions(stair.type).halfWidth);
+ // The portal is the full finite tread edge, not a circle around its centre.
+ return Math.hypot(outsideWidth,p.z-end.z)<=PLAYER.radius+EPS;
+}
 function supportedBody(b,contact,candidate){
  if(!contact||Math.abs(candidate.y-PLAYER.eyeHeight-contact.height)>CONTACT)return false;
  if(contact.stair===b)return true;
  const joint=commonEnd(b,contact.stair);
- return !!joint&&Math.hypot(candidate.x-joint.x,candidate.z-joint.z)<=PLAYER.radius+EPS;
+ return !!joint&&footTouchesEndEdge(b,joint,candidate)&&footTouchesEndEdge(contact.stair,joint,candidate);
 }
 export function resolveStairSides(buildings,from,candidate,{grounded=false,velocity=0,terrain=()=>-Infinity}={}){
  const contact=grounded&&velocity<=0?walkContact(buildings,from,candidate,from.y-PLAYER.eyeHeight,terrain):null;
