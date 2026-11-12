@@ -113,7 +113,7 @@ button:hover{background:#416445}button:disabled{opacity:.35;cursor:not-allowed}
 <body class="in-main-menu">
 <div id="game"></div>
 <div id="start"><div class="card panel">
-<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.8.28</div>
+<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.8.29</div>
 <p>Erkunde eine unebene Waldlandschaft, sammle Rohstoffe, stelle eine Axt her und bearbeite Bäume und Felsen. Deine private Survival-Welt wird mit deinem Konto online gespeichert.</p>
 <p><b>WASD</b> bewegen · <b>Maus</b> umsehen · <b>E</b> sammeln · <b>Shift</b> sprinten · <b>I</b> Inventar · <b>C</b> Crafting · <b>1–4</b> Schnellauswahl · <b>R</b> drehen · <b>E</b> platzieren · <b>Esc</b> Maus lösen</p>
 <section id="cloudLogin" style="margin:14px auto;padding:12px;border:1px solid #658c6d;border-radius:10px;max-width:400px;background:#10231b">
@@ -739,7 +739,9 @@ function resolveCollision(candidate){
    if(feet>=deckSurface(b)-.10)continue;
    // Allow walking from the last stair tread onto the platform edge.
    const stairHere=stairSurface(candidate.x,candidate.z);
-   if(stairHere!==null&&feet>=stairHere-.48&&deckSurface(b)-feet<=.55)continue;
+   // The staircase forms a walkable opening through the platform side collision.
+   // Limit the opening to a ramp directly meeting this platform's top.
+   if(stairHere!==null&&Math.abs(deckSurface(b)-stairHere)<.65&&feet>=stairHere-.75)continue;
    const c=Math.cos(b.rotation),sn=Math.sin(b.rotation);
    const dx=candidate.x-b.x,dz=candidate.z-b.z;
    let lx=dx*c+dz*sn,lz=-dx*sn+dz*c;
@@ -782,20 +784,20 @@ function resolveCollision(candidate){
 }
 // Walkable stair treads: derive the collision height from the same dimensions as the meshes.
 // Continuous invisible collision ramp; visual wooden steps remain unchanged.
+// Continuous invisible walking plane, independent of the visible wooden treads.
 function stairSurface(x,z){
- let top=null;
+ let best=null;
  for(const b of buildings){
   if(b.type!=='stairs'&&b.type!=='steepStairs')continue;
   const d=stairDimensions(b.type),c=Math.cos(b.rotation),sn=Math.sin(b.rotation);
   const dx=x-b.x,dz=z-b.z,lx=dx*c+dz*sn,lz=-dx*sn+dz*c;
-  if(Math.abs(lx)>1.22||lz<-.24||lz>d.length+.18)continue;
+  if(Math.abs(lx)>1.20||lz<-.22||lz>d.length+.22)continue;
+  // The attachment end is the high end; lower end may be buried in terrain.
   const progress=Math.max(0,Math.min(1,lz/d.length));
-  // Match the top of the visible steps: first tread is below the attachment.
-  const count=b.type==='steepStairs'?6:5;
-  const y=b.mesh.position.y-d.drop*Math.min(1,(Math.floor(progress*count)+1)/count)+.16;
-  if(top===null||y>top)top=y;
+  const y=b.mesh.position.y-d.drop*progress+.08;
+  if(best===null||y>best)best=y;
  }
- return top;
+ return best;
 }
 function foundationSurface(x,z){
  let top=null;
@@ -848,16 +850,15 @@ function autoHopAtLowFoundation(nextX,nextZ){
  }
 }
 function movePlayer(move,distance){
- // Move in short segments so both stair types remain traversable.
- const count=Math.max(1,Math.ceil(distance/.10)),step=distance/count;
+ const count=Math.max(1,Math.ceil(distance/.08)),step=distance/count;
  for(let i=0;i<count;i++){
   const intended=player.pos.clone().addScaledVector(move,step);
   const ramp=stairSurface(intended.x,intended.z);
   const oldRamp=stairSurface(player.pos.x,player.pos.z);
   const feet=player.pos.y-1.7;
-  const onStairs=grounded&&verticalSpeed<=0&&(oldRamp!==null||ramp!==null);
-  if(onStairs&&ramp!==null&&ramp-feet<=.48&&ramp-feet>=-.65){
-   // Set the character to the physical tread height, no jumping or gravity gap.
+  const walking=grounded&&verticalSpeed<=0;
+  // Ramp contact is continuous: no per-step snapping or automatic jumping.
+  if(walking&&ramp!==null&&ramp-feet<.55&&ramp-feet>-.9){
    player.pos.y=Math.max(terrainHeight(intended.x,intended.z),ramp)+1.7;
    verticalSpeed=0;
   }else if(oldRamp===null&&ramp===null){
@@ -865,10 +866,9 @@ function movePlayer(move,distance){
   }
   const candidate=resolveCollision(intended);
   player.pos.x=candidate.x;player.pos.z=candidate.z;
-  // Allow seamless exit onto the deck from the top of the ramp.
-  if(grounded&&oldRamp!==null&&ramp===null){
+  if(walking&&oldRamp!==null&&ramp===null){
    const deck=foundationSurface(candidate.x,candidate.z);
-   if(deck!==null&&deck-(player.pos.y-1.7)<=.48&&deck-(player.pos.y-1.7)>=-.30){
+   if(deck!==null&&Math.abs(deck-(player.pos.y-1.7))<.55){
     player.pos.y=Math.max(player.pos.y,deck+1.7);verticalSpeed=0;
    }
   }
@@ -1356,7 +1356,7 @@ function animate(now){
   verticalSpeed-=15*dt;player.pos.y+=verticalSpeed*dt;
   const nextFeet=player.pos.y-1.7;
   const landingOnDeck=surface!==null&&verticalSpeed<=0&&currentFeet>=surface-.15&&nextFeet<=surface;
-  const stairFloor=stair!==null&&verticalSpeed<=0&&currentFeet>=stair-.85&&currentFeet<=stair+1.0;
+  const stairFloor=stair!==null&&verticalSpeed<=0&&currentFeet>=stair-.70&&currentFeet<=stair+.85;
   const floor=Math.max(terrain,landingOnDeck||surface!==null&&grounded&&Math.abs(currentFeet-surface)<.15?surface:terrain,stairFloor?stair:terrain);
   if(player.pos.y<=floor+1.7){player.pos.y=floor+1.7;verticalSpeed=0;grounded=true;}
   else grounded=false;
