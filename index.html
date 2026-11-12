@@ -113,7 +113,7 @@ button:hover{background:#416445}button:disabled{opacity:.35;cursor:not-allowed}
 <body class="in-main-menu">
 <div id="game"></div>
 <div id="start"><div class="card panel">
-<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.8.29</div>
+<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.8.30</div>
 <p>Erkunde eine unebene Waldlandschaft, sammle Rohstoffe, stelle eine Axt her und bearbeite Bäume und Felsen. Deine private Survival-Welt wird mit deinem Konto online gespeichert.</p>
 <p><b>WASD</b> bewegen · <b>Maus</b> umsehen · <b>E</b> sammeln · <b>Shift</b> sprinten · <b>I</b> Inventar · <b>C</b> Crafting · <b>1–4</b> Schnellauswahl · <b>R</b> drehen · <b>E</b> platzieren · <b>Esc</b> Maus lösen</p>
 <section id="cloudLogin" style="margin:14px auto;padding:12px;border:1px solid #658c6d;border-radius:10px;max-width:400px;background:#10231b">
@@ -726,6 +726,41 @@ function resolveCollision(candidate){
    if(d2<min*min){const d=Math.sqrt(d2),nx=d>.00001?dx/d:1,nz=d>.00001?dz/d:0;
     candidate.x=o.mesh.position.x+nx*min;candidate.z=o.mesh.position.z+nz*min;corrected=true;
    }
+  }
+  // Stair bodies are solid from the sides, but leave real headroom underneath.
+  // The existing ramp remains the walkable top surface.
+  for(const b of buildings){
+   if(!isStair(b))continue;
+   const d=stairDimensions(b.type),radius=.38;
+   const local=worldToLocal(b,candidate.x,candidate.z);
+   const nearX=Math.max(-1.25,Math.min(1.25,local.x));
+   const nearZ=Math.max(0,Math.min(d.length,local.z));
+   const vx=local.x-nearX,vz=local.z-nearZ;
+   const dist2=vx*vx+vz*vz;
+   if(dist2>=radius*radius)continue;
+   // Check the height of the solid steps at the closest point of contact.
+   const top=b.mesh.position.y-d.drop*(nearZ/d.length)+.16;
+   const underside=b.mesh.position.y-d.drop*(nearZ/d.length)-.30;
+   const feet=candidate.y-1.7,head=candidate.y;
+   if(head<=underside+.02||feet>=top-.14)continue;
+   // A player already supported by this flight must be able to walk along it.
+   const walkingHeight=stairHeight(b,candidate.x,candidate.z);
+   if(walkingHeight!==null&&Math.abs(feet-walkingHeight)<.12)continue;
+   let pushX,pushZ;
+   if(dist2>1e-10){
+    const dist=Math.sqrt(dist2);
+    pushX=vx*(radius-dist)/dist;pushZ=vz*(radius-dist)/dist;
+   }else{
+    // Inside the footprint: push toward the nearest side/end, not through it.
+    const left=local.x+1.25,right=1.25-local.x,front=local.z,back=d.length-local.z;
+    const nearest=Math.min(left,right,front,back);
+    pushX=nearest===left?-left-radius:nearest===right?right+radius:0;
+    pushZ=nearest===front?-front-radius:nearest===back?back+radius:0;
+   }
+   const c=Math.cos(b.rotation),sn=Math.sin(b.rotation);
+   candidate.x+=pushX*c+pushZ*sn;
+   candidate.z+=-pushX*sn+pushZ*c;
+   corrected=true;
   }
   // Raised foundations: solid horizontal footprint below the platform.
   // Keep the player on the outside of the 3x3 m footprint while below its deck.
