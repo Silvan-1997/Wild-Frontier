@@ -113,7 +113,7 @@ button:hover{background:#416445}button:disabled{opacity:.35;cursor:not-allowed}
 <body class="in-main-menu">
 <div id="game"></div>
 <div id="start"><div class="card panel">
-<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.8.21</div>
+<h1>WILD FRONTIER</h1><div class="small">EARLY PLAYABLE PROTOTYPE · BUILD 1.8.22</div>
 <p>Erkunde eine unebene Waldlandschaft, sammle Rohstoffe, stelle eine Axt her und bearbeite Bäume und Felsen. Deine private Survival-Welt wird mit deinem Konto online gespeichert.</p>
 <p><b>WASD</b> bewegen · <b>Maus</b> umsehen · <b>E</b> sammeln · <b>Shift</b> sprinten · <b>I</b> Inventar · <b>C</b> Crafting · <b>1–4</b> Schnellauswahl · <b>R</b> drehen · <b>E</b> platzieren · <b>Esc</b> Maus lösen</p>
 <section id="cloudLogin" style="margin:14px auto;padding:12px;border:1px solid #658c6d;border-radius:10px;max-width:400px;background:#10231b">
@@ -1038,6 +1038,9 @@ function rotatePlacement(degrees=90){
 }
 function cancelPlacement(){if(rotationPress){rotationPress.long=true;stopRotationPress();}if(!placement)return;scene.remove(placement.mesh);placement.mesh.traverse(o=>{if(o.geometry)o.geometry.dispose();});placement=null;document.querySelector('#buildQuick').hidden=true;document.querySelector('#buildInfo').hidden=true;document.querySelector('#buildPalette').hidden=true;document.querySelector('#touchCollect').textContent='AKTION';}
 const GRID=3;
+const STAIR_TYPES=['stairs','steepStairs'];
+function stairDimensions(type){return type==='steepStairs'?{length:6*.35,drop:6*.24}:{length:5*.55,drop:5*.14};}
+function stairLowerEnd(b){const d=stairDimensions(b.type),v=rotateXZ(0,d.length,b.rotation);return {x:b.x+v.x,z:b.z+v.z,y:b.mesh.position.y-d.drop};}
 function cellKey(x,z){return `${Math.round(x/GRID)},${Math.round(z/GRID)}`;}
 function edgeKey(x,z,rotation){return `${Math.round(x/1.5)},${Math.round(z/1.5)},${Math.round(Math.cos(rotation))===0?'x':'z'}`;}
 function updatePlacement(){
@@ -1046,6 +1049,7 @@ function updatePlacement(){
  let x=rawX,z=rawZ,rotation=p.rotation;
  const foundations=buildings.filter(b=>['foundation','raisedFoundation'].includes(b.type));
  let support=null, groupId=null;
+ p.stairChainY=null;
  if(snapEnabled){
   if(['foundation','raisedFoundation'].includes(p.type)){
    // Search edges of every existing foundation, including freely rotated buildings.
@@ -1070,15 +1074,22 @@ function updatePlacement(){
      candidates.push({x:b.x+v.x,z:b.z+v.z,rotation:b.rotation+r,base:b});
     }
    }
+   // Stair-to-stair snapping: next flight begins at the previous flight's lower end.
+   if(STAIR_TYPES.includes(p.type))for(const b of buildings){
+    if(!STAIR_TYPES.includes(b.type))continue;
+    const end=stairLowerEnd(b);
+    candidates.push({x:end.x,z:end.z,rotation:b.rotation,base:b,stairEndY:end.y,stairChain:true});
+   }
    candidates.sort((a,b)=>distXZ(a,{x:rawX,z:rawZ})-distXZ(b,{x:rawX,z:rawZ}));
    if(candidates.length&&distXZ(candidates[0],{x:rawX,z:rawZ})<4.5){
-    const c=candidates[0];x=c.x;z=c.z;rotation=c.rotation+(['stairs','steepStairs'].includes(p.type)?p.stairFlip:0);support=c.base;groupId=c.base.groupId;
+    const c=candidates[0];x=c.x;z=c.z;rotation=c.rotation+(STAIR_TYPES.includes(p.type)?p.stairFlip:0);support=c.base;groupId=c.base.groupId;
+    p.stairChainY=c.stairChain?c.stairEndY:null;
    }
   }
  }
  p.groupId=groupId;
  // Build pieces inherit the actual top surface of raised platforms.
- p.elevation=support?(FOUNDATION_TYPES.includes(p.type)?deckY(support):deckSurface(support)):(FOUNDATION_TYPES.includes(p.type)?terrainTop(x,z,rotation)+(FLOOR_OFFSET[p.type]||0):terrainHeight(x,z));
+ p.elevation=Number.isFinite(p.stairChainY)?p.stairChainY:(support?(FOUNDATION_TYPES.includes(p.type)?deckY(support):STAIR_TYPES.includes(support.type)?support.mesh.position.y:deckSurface(support)):(FOUNDATION_TYPES.includes(p.type)?terrainTop(x,z,rotation)+(FLOOR_OFFSET[p.type]||0):terrainHeight(x,z)));
  p.mesh.position.set(x,p.elevation-(FLOOR_OFFSET[p.type]||0),z);p.mesh.rotation.y=rotation;
  setSupportPosts(p.mesh,p.type,x,z,rotation,true);
  p.rotation=rotation;
@@ -1086,7 +1097,7 @@ function updatePlacement(){
  let valid=!inRiver(x,z,radius);
  if(['foundation','raisedFoundation'].includes(p.type)){
   valid=valid&&!buildings.some(b=>['foundation','raisedFoundation'].includes(b.type)&&Math.hypot(x-b.x,z-b.z)<2.65);
- }else if(['wall','door','window','stairs','roof','slopedRoof'].includes(p.type)){
+ }else if(['wall','door','window','stairs','steepStairs','roof','slopedRoof'].includes(p.type)){
   valid=valid&&(!!support||!snapEnabled);
   if(['roof','slopedRoof'].includes(p.type))valid=valid&&!buildings.some(b=>['roof','slopedRoof'].includes(b.type)&&Math.hypot(x-b.x,z-b.z)<.35);
   else valid=valid&&!buildings.some(b=>(['stairs','steepStairs'].includes(p.type)?['stairs','steepStairs'].includes(b.type):['wall','door','window'].includes(b.type))&&Math.hypot(x-b.x,z-b.z)<.28);
@@ -1097,7 +1108,7 @@ function updatePlacement(){
   for(const b of buildings){if(!valid)break;
    if(['bed','fire'].includes(p.type)&&support===b)continue;
    if(['foundation','raisedFoundation'].includes(p.type)&&['foundation','raisedFoundation'].includes(b.type))continue;
-   if(['foundation','raisedFoundation'].includes(p.type)&&['wall','door','window','stairs','roof','slopedRoof'].includes(b.type))continue;
+   if(['foundation','raisedFoundation'].includes(p.type)&&['wall','door','window','stairs','steepStairs','roof','slopedRoof'].includes(b.type))continue;
    if(Math.hypot(x-b.x,z-b.z)<radius+(b.type==='fire'?1:1.3))valid=false;}
   for(const b of campfires)if(Math.hypot(x-b.x,z-b.z)<radius+1)valid=false;
  }
