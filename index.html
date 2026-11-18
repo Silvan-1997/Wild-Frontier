@@ -337,6 +337,38 @@ const CHUNK_SIZE=64,CHUNK_SEGMENTS=32,CHUNK_RADIUS=2;
 const terrainChunks=new Map();
 // Lightweight solid footprints for streamed vegetation; owned by each chunk.
 const streamedSolids=new Map();
+const streamedResourceStates=new Map(); // Only changed resources enter cloud saves.
+function streamedResourceKey(cx,cz,type,index){return cx+','+cz+':'+type+':'+index;}
+function resourceState(key,maxHp){let state=streamedResourceStates.get(key);if(state&&state.respawnAt&&state.respawnAt<=Date.now()){streamedResourceStates.delete(key);state=null;}return state||{hp:maxHp,respawnAt:0};}
+function setStreamedInstance(entry,visible){
+ const m=new THREE.Matrix4();
+ for(let i=0;i<entry.meshes.length;i++){if(visible)m.copy(entry.matrices?.[i]||entry.matrix);else m.makeScale(0,0,0);entry.meshes[i].setMatrixAt(entry.index,m);entry.meshes[i].instanceMatrix.needsUpdate=true;}
+}
+function refreshStreamedResource(entry){
+ const state=resourceState(entry.key,entry.maxHp),active=!state.respawnAt;
+ if(entry.active!==active){entry.active=active;setStreamedInstance(entry,active);}
+ return active;
+}
+function nearestStreamedResource(maxDistance=3.2){
+ let best=null,dist=maxDistance;
+ const cx=Math.floor((player.pos.x+CHUNK_SIZE/2)/CHUNK_SIZE),cz=Math.floor((player.pos.z+CHUNK_SIZE/2)/CHUNK_SIZE);
+ for(let dz=-1;dz<=1;dz++)for(let dx=-1;dx<=1;dx++)for(const entry of streamedSolids.get(chunkKey(cx+dx,cz+dz))||[]){
+  if(!refreshStreamedResource(entry))continue;
+  const d=Math.hypot(player.pos.x-entry.x,player.pos.z-entry.z);
+  if(d<dist){dist=d;best=entry;}
+ }
+ return {entry:best,distance:dist};
+}
+function harvestStreamedResource(entry){
+ const state=resourceState(entry.key,entry.maxHp);
+ const damage=activeTool==='axe'?1:.5;
+ state.hp-=damage;
+ if(state.hp>0){streamedResourceStates.set(entry.key,state);toast(entry.label+': noch '+Math.ceil(state.hp)+' Treffer.');return;}
+ const amount=entry.type==='wood'?3+Math.floor(Math.random()*3):2+Math.floor(Math.random()*2);
+ inventory[entry.type]+=amount;
+ state.hp=0;state.respawnAt=Date.now()+90000;streamedResourceStates.set(entry.key,state);
+ refreshStreamedResource(entry);updateInv();toast(entry.label+' abgebaut: +'+amount+' '+labels[entry.type]+'. Nachwuchs in 90 Sekunden.');
+}
 // Shared low-poly meshes keep distant chunk vegetation inexpensive on mobile.
 // All placement is deterministic; the original starter zone remains untouched.
 const chunkTrunkGeo=new THREE.CylinderGeometry(.18,.30,2.4,5);
@@ -384,10 +416,8 @@ function createChunkVegetation(cx,cz,group){
   if(rand()<.72)trees.push({x,z,h,scale:.65+rand()*.75,rot:rand()*Math.PI*2});
   else rocks.push({x,z,h,scale:.45+rand()*1.3,rot:rand()*Math.PI*2});
  }
- streamedSolids.set(chunkKey(cx,cz),[
-  ...trees.map(p=>({x:p.x,z:p.z,r:.34*p.scale})),
-  ...rocks.map(p=>({x:p.x,z:p.z,r:.64*p.scale}))
- ]);
+ const entries=[];
+ streamedSolids.set(chunkKey(cx,cz),entries);
  if(trees.length){
   const trunks=new THREE.InstancedMesh(chunkTrunkGeo,mats.trunk,trees.length);
   const crowns=new THREE.InstancedMesh(chunkCrownGeo,mats.leaf,trees.length);
@@ -401,6 +431,14 @@ function createChunkVegetation(cx,cz,group){
   trunks.instanceMatrix.needsUpdate=true;crowns.instanceMatrix.needsUpdate=true;
   trunks.frustumCulled=false;crowns.frustumCulled=false;
   group.add(trunks,crowns);
+  trees.forEach((p,i)=>{
+   const matrix=new THREE.Matrix4();trunks.getMatrixAt(i,matrix);
+   const entry={x:p.x,z:p.z,r:.34*p.scale,type:'wood',label:'Baum',key:streamedResourceKey(cx,cz,'tree',i),maxHp:3,index:i,matrix,meshes:[trunks,crowns],active:true};
+   // Crown matrix differs from trunk matrix: preserve both.
+   const crownMatrix=new THREE.Matrix4();crowns.getMatrixAt(i,crownMatrix);
+   entry.matrices=[matrix,crownMatrix];entries.push(entry);
+   if(resourceState(entry.key,3).respawnAt){entry.active=false;setStreamedInstance(entry,false);}
+  });
  }
  if(rocks.length){
   const mesh=new THREE.InstancedMesh(chunkRockGeo,mats.rock,rocks.length);
@@ -410,6 +448,12 @@ function createChunkVegetation(cx,cz,group){
    mesh.setMatrixAt(i,chunkDummy.matrix);
   });
   mesh.instanceMatrix.needsUpdate=true;mesh.frustumCulled=false;group.add(mesh);
+  rocks.forEach((p,i)=>{
+   const matrix=new THREE.Matrix4();mesh.getMatrixAt(i,matrix);
+   const entry={x:p.x,z:p.z,r:.64*p.scale,type:'stone',label:'Fels',key:streamedResourceKey(cx,cz,'rock',i),maxHp:4,index:i,matrix,meshes:[mesh],active:true};
+   entries.push(entry);
+   if(resourceState(entry.key,4).respawnAt){entry.active=false;setStreamedInstance(entry,false);}
+  });
  }
 }
 
@@ -758,6 +802,7 @@ function resolveCollision(candidate){
   const scx=Math.floor((candidate.x+CHUNK_SIZE/2)/CHUNK_SIZE),scz=Math.floor((candidate.z+CHUNK_SIZE/2)/CHUNK_SIZE);
   for(let dz=-1;dz<=1;dz++)for(let dx=-1;dx<=1;dx++){
    for(const solid of streamedSolids.get(chunkKey(scx+dx,scz+dz))||[]){
+    if(!refreshStreamedResource(solid))continue;
     const vx=candidate.x-solid.x,vz=candidate.z-solid.z,min=radius+solid.r,d2=vx*vx+vz*vz;
     if(d2>=min*min)continue;
     const d=Math.sqrt(d2),nx=d>1e-5?vx/d:1,nz=d>1e-5?vz/d:0;
@@ -896,6 +941,8 @@ function collect(){
  let best=null,dist=3.2;
  for(const o of objects){if(o.active===false)continue;const dx=player.pos.x-o.mesh.position.x,dz=player.pos.z-o.mesh.position.z,d=Math.hypot(dx,dz);if(d<dist){dist=d;best=o;}}
  if(placement)return;
+ const streamed=nearestStreamedResource();
+ if(streamed.entry&&(!best||streamed.distance<dist)){harvestStreamedResource(streamed.entry);return;}
  if(!best){toast('Nichts zum Bearbeiten in Reichweite.');return;}
  if(best.type==='berries'){const n=best.amount();inventory.berries+=n;best.active=false;best.respawnAt=Date.now()+45000;best.mesh.visible=false;updateInv();toast(`Beeren gesammelt: +${n}. Der Strauch braucht Zeit zum Nachwachsen.`);return;}
  const damage=activeTool==='axe'?1:0.5;best.hp-=damage;
@@ -1231,7 +1278,7 @@ document.querySelector('#drinkNearby').addEventListener('click',()=>{
 function saveGame(silent=false){
  try{
   const state={version:4,pos:[player.pos.x,player.pos.z],playerY:player.pos.y,home:{...homePosition},homeBedId,nextBedId,yaw,pitch,health:player.health,hunger:player.hunger,thirst:player.thirst,inventory:{...inventory},axeEquipped,elapsed,
-   objects:objects.map(o=>({active:o.active!==false,hp:o.hp,respawnAt:o.respawnAt||0})),campfires:campfires.map(({x,z})=>({x,z})),buildings:buildings.map(({type,x,z,rotation,open,groupId,elevation,bedId})=>({type,x,z,rotation,open:!!open,groupId,elevation,bedId})),activeTool};
+   objects:objects.map(o=>({active:o.active!==false,hp:o.hp,respawnAt:o.respawnAt||0})),streamedResources:Object.fromEntries(streamedResourceStates),campfires:campfires.map(({x,z})=>({x,z})),buildings:buildings.map(({type,x,z,rotation,open,groupId,elevation,bedId})=>({type,x,z,rotation,open:!!open,groupId,elevation,bedId})),activeTool};
   if(!cloudReady||!cloudWorldId)return;
   cloudPending=state;
   if(!cloudBusy)flushCloudSave();
@@ -1263,6 +1310,15 @@ function loadGame(state){
   for(const k of Object.keys(inventory))if(Number.isFinite(state.inventory?.[k]))inventory[k]=Math.max(0,Math.floor(state.inventory[k]));
   axeEquipped=!!state.axeEquipped&&inventory.axe>0;activeTool=['hands','axe','hammer'].includes(state.activeTool)?state.activeTool:(axeEquipped?'axe':'hands');if(activeTool==='hammer'&&!inventory.hammer||activeTool==='axe'&&!inventory.axe)activeTool='hands';axeEquipped=activeTool==='axe';
   elapsed=Number.isFinite(state.elapsed)?Math.max(0,state.elapsed):0;
+  streamedResourceStates.clear();
+  if(state.streamedResources&&typeof state.streamedResources==='object'){
+   for(const [key,value] of Object.entries(state.streamedResources).slice(0,10000)){
+    if(!/^-?\\d+,-?\\d+:(tree|rock):\\d+$/.test(key)||!value||!Number.isFinite(value.hp)||!Number.isFinite(value.respawnAt))continue;
+    if(value.respawnAt&&value.respawnAt<=Date.now())continue;
+    streamedResourceStates.set(key,{hp:Math.max(0,value.hp),respawnAt:Math.max(0,value.respawnAt)});
+   }
+  }
+  for(const entries of streamedSolids.values())for(const entry of entries)refreshStreamedResource(entry);
   if(Array.isArray(state.objects)&&state.objects.length<=objects.length){state.objects.forEach((saved,i)=>{
    const o=objects[i];o.active=saved.active!==false;o.hp=Number.isFinite(saved.hp)?saved.hp:o.maxHp;
    o.respawnAt=Number.isFinite(saved.respawnAt)?saved.respawnAt:0;
@@ -1321,6 +1377,7 @@ const raycaster=new THREE.Raycaster();
 function nearestPrompt(){
  let best=null,dist=3.2;
  for(const o of objects){if(o.active===false)continue;const dx=player.pos.x-o.mesh.position.x,dz=player.pos.z-o.mesh.position.z,d=Math.hypot(dx,dz);if(d<dist){dist=d;best=o;}}
+ const streamed=nearestStreamedResource();if(streamed.entry&&streamed.distance<dist)best={label:streamed.entry.label};
  const aimed=aimedBuilding(4.5);document.querySelector('#prompt').textContent=activeTool==='hammer'?(aimed?'[E] '+(aimed.type==='fire'?'Lagerfeuer':recipes[aimed.type].title)+' abreissen':'[E] Bauteil anvisieren'):(aimed?.type==='door'?'[E] Tür '+(aimed.open?'schliessen':'öffnen'):best?`[E] ${best.label} bearbeiten` :'');
 }
 const minimap=document.querySelector('#minimap'),mapCtx=minimap.getContext('2d');
@@ -1345,6 +1402,10 @@ function drawMinimap(now){
  for(const o of objects){if(o.active===false)continue;const x=o.mesh.position.x,z=o.mesh.position.z;
   if(Math.abs(x-centerX)>range/2||Math.abs(z-centerZ)>range/2)continue;
   c.fillStyle=o.type==='wood'?'#a7d18d':o.type==='stone'?'#c4c6c3':'#d8566b';c.fillRect(px(x)-1,pz(z)-1,2.5,2.5);
+ }
+ for(const entries of streamedSolids.values())for(const entry of entries){
+  if(Math.abs(entry.x-centerX)>range/2||Math.abs(entry.z-centerZ)>range/2||!refreshStreamedResource(entry))continue;
+  c.fillStyle=entry.type==='wood'?'#a7d18d':'#c4c6c3';c.fillRect(px(entry.x)-1,pz(entry.z)-1,2.5,2.5);
  }
  c.fillStyle='#e0b57b';for(const b of buildings)c.fillRect(px(b.x)-2,pz(b.z)-2,4,4);
  // Home is always visible: pin to the minimap edge when outside the visible area.
